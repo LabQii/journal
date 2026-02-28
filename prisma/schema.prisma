@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+}
+
+model Note {
+  id        String   @id @default(cuid())
+  title     String
+  content   String
+  url       String?
+  category  String   @default("Santai")
+  imageUrl  String?
+  createdAt DateTime @default(now())
+}
+
+model Book {
+  id            String         @id @default(cuid())
+  title         String
+  description   String
+  author        String
+  cover         String?
+  status        String         @default("ONGOING")
+  publishedDate DateTime?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  parts         Part[]
+  favoritedBy   BookFavorite[]
+}
+
+model Part {
+  id         String   @id @default(cuid())
+  title      String
+  content    String
+  partNumber Int
+  bookId     String
+  book       Book     @relation(fields: [bookId], references: [id])
+  createdAt  DateTime @default(now())
+}
+
+model Gallery {
+  id          String            @id @default(cuid())
+  photoUrl    String
+  description String?
+  createdAt   DateTime          @default(now())
+  favoritedBy GalleryFavorite[]
+}
+
+enum Role {
+  king
+  queen
+}
+
+model User {
+  id               String            @id @default(cuid())
+  username         String            @unique
+  password         String
+  role             Role              @default(queen)
+  name             String?
+  bookFavorites    BookFavorite[]
+  galleryFavorites GalleryFavorite[]
+  notifications    Notification[]
+}
+
+model BookFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  bookId    String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
+}
+
+model GalleryFavorite {
+  id        String   @id @default(cuid())
+  userId    String
+  galleryId String
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  gallery   Gallery  @relation(fields: [galleryId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, galleryId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  title     String
+  subtitle  String?
+  href      String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
