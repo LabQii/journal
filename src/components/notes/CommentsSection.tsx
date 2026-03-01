@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { MessageCircle, Send, Trash2, CornerDownRight, Search, X, Crown, Loader2, MessageSquareDashed, Pencil, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { usePolling } from "@/hooks/usePolling";
+import { supabaseClient } from "@/lib/supabase-client";
 
 interface CommentUser {
     id: string;
@@ -129,7 +129,7 @@ function CommentItem({
     };
 
     return (
-        <div className={`${level > 0 ? "ml-6 md:ml-10 border-l-2 border-border/50 pl-4" : ""}`}>
+        <div id={`comment-${comment.id}`} className={`${level > 0 ? "ml-6 md:ml-10 border-l-2 border-border/50 pl-4" : ""}`}>
             <motion.div
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -311,11 +311,90 @@ export function CommentsSection({ noteId }: CommentsSectionProps) {
     // Initial load (shows spinner)
     useEffect(() => {
         setIsLoading(true);
-        fetchComments().finally(() => setIsLoading(false));
+        fetchComments().finally(() => {
+            setIsLoading(false);
+            // After comments load, scroll to hash anchor if present (e.g. from notification click)
+            if (typeof window !== "undefined" && window.location.hash) {
+                const hash = window.location.hash;
+                setTimeout(() => {
+                    const el = document.querySelector(hash);
+                    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                }, 300);
+            }
+        });
     }, [fetchComments]);
 
-    // Background polling every 20s — paused while user is typing a reply
-    usePolling(fetchComments, 20_000, !newComment.trim());
+    // ─── Supabase Realtime subscription — replaces 20s polling ──────────
+    useEffect(() => {
+        // Subscribe to all changes on the Comment table filtered by noteId
+        const channel = supabaseClient
+            .channel(`comments:${noteId}`)
+            .on(
+                "postgres_changes",
+                { event: "INSERT", schema: "public", table: "Comment", filter: `noteId=eq.${noteId}` },
+                async (payload: { new: { id: string } }) => {
+                    // Realtime payload only has raw DB columns — fetch full comment with user relation
+                    try {
+                        const res = await fetch(`/api/notes/${noteId}/comments`);
+                        if (!res.ok) return;
+                        const all: Comment[] = await res.json();
+                        const inserted = all.find(c => c.id === payload.new.id);
+                        if (!inserted) return;
+
+                        setComments(prev => {
+                            // Avoid duplicate (optimistic add from this user already applied)
+                            if (prev.some(c => c.id === inserted.id)) return prev;
+                            if (inserted.parentId) {
+                                // It's a reply — append into parent's replies
+                                return prev.map(c =>
+                                    c.id === inserted.parentId
+                                        ? { ...c, replies: [...(c.replies ?? []), inserted] }
+                                        : c
+                                );
+                            }
+                            return [...prev, inserted];
+                        });
+                    } catch { /* silent */ }
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "UPDATE", schema: "public", table: "Comment", filter: `noteId=eq.${noteId}` },
+                (payload: { new: Record<string, unknown> }) => {
+                    const { id, content, parentId } = payload.new as { id: string; content: string; parentId: string | null };
+                    setComments(prev => {
+                        if (parentId) {
+                            return prev.map(c =>
+                                c.id === parentId
+                                    ? { ...c, replies: c.replies.map(r => r.id === id ? { ...r, content } : r) }
+                                    : c
+                            );
+                        }
+                        return prev.map(c => c.id === id ? { ...c, content } : c);
+                    });
+                }
+            )
+            .on(
+                "postgres_changes",
+                { event: "DELETE", schema: "public", table: "Comment", filter: `noteId=eq.${noteId}` },
+                (payload: { old: Record<string, unknown> }) => {
+                    const { id, parentId } = payload.old as { id: string; parentId: string | null };
+                    setComments(prev => {
+                        if (parentId) {
+                            return prev.map(c =>
+                                c.id === parentId
+                                    ? { ...c, replies: c.replies.filter(r => r.id !== id) }
+                                    : c
+                            );
+                        }
+                        return prev.filter(c => c.id !== id);
+                    });
+                }
+            )
+            .subscribe();
+
+        return () => { supabaseClient.removeChannel(channel); };
+    }, [noteId]);
 
     const handlePost = async () => {
         setTouched(true);

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
     BookOpen, Search, Bell, PenLine, BookMarked, Users,
-    X, Loader2, Globe, Menu, Home, Image, ImageIcon, LogIn, LogOut, Crown
+    X, Loader2, Globe, Menu, Home, Image, ImageIcon, LogIn, LogOut, Crown, MessageCircle
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -124,7 +124,21 @@ export function Navbar() {
         }
 
         setShowNotifPanel(false);
-        router.push(href);
+
+        // Parse path and hash from href
+        const hashIdx = href.indexOf("#");
+        const path = hashIdx !== -1 ? href.slice(0, hashIdx) : href;
+        const hash = hashIdx !== -1 ? href.slice(hashIdx) : "";
+        const currentPath = window.location.pathname;
+
+        if (hash && currentPath === path) {
+            // Already on the page — just scroll to the anchor
+            const el = document.querySelector(hash);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        } else {
+            // Navigate, CommentsSection will scroll to hash after load
+            router.push(href);
+        }
     };
 
     const handleMarkAllRead = async () => {
@@ -384,26 +398,46 @@ export function Navbar() {
                                             {t("notif_empty")}
                                         </div>
                                     ) : (
-                                        <div className="max-h-[360px] overflow-y-auto divide-y divide-border/50">
+                                        <div className="max-h-[360px] overflow-y-auto divide-y divide-border/30">
                                             {notifications.map((notif) => {
-                                                const prefix = notif.type === "note" ? t("notif_new_note") : t("notif_new_book");
-                                                const rawTitle = notif.title.includes(":") ? notif.title.split(":").slice(1).join(":").trim() : notif.title;
+                                                const isComment = notif.type === "comment";
+                                                const isGallery = notif.type === "gallery";
+                                                const isNote = notif.type === "note";
                                                 return (
-                                                    <Link key={notif.id} href={notif.href} onClick={() => setShowNotifPanel(false)}
-                                                        className={`flex items-start gap-3 px-4 py-3 hover:bg-muted/50 transition-colors ${!notif.isRead ? "bg-primary/5" : ""}`}>
-                                                        <div className={`h-8 w-8 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${notif.type === "note" ? "bg-primary/20 text-primary" : notif.type === "gallery" ? "bg-amber-100 text-amber-600" : "bg-secondary/20 text-secondary"}`}>
-                                                            {notif.type === "note" ? <PenLine className="h-4 w-4 drop-shadow-sm" /> : notif.type === "gallery" ? <ImageIcon className="h-4 w-4 drop-shadow-sm" /> : <BookMarked className="h-4 w-4 drop-shadow-sm" />}
+                                                    <button
+                                                        key={notif.id}
+                                                        onClick={() => handleNotificationClick(notif.href, notif.id)}
+                                                        className={`w-full flex items-start gap-3 px-4 py-3.5 hover:bg-muted/40 transition-colors text-left relative ${!notif.isRead ? "bg-muted/30" : ""}`}
+                                                    >
+                                                        {/* Unread accent bar */}
+                                                        {!notif.isRead && (
+                                                            <span className="absolute left-0 top-3 bottom-3 w-[3px] rounded-full bg-primary/60" />
+                                                        )}
+                                                        {/* Icon — unified muted square style */}
+                                                        <div className="h-8 w-8 rounded-xl bg-muted flex items-center justify-center shrink-0 mt-0.5 border border-border/50">
+                                                            {isComment
+                                                                ? <MessageCircle className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                : isNote
+                                                                    ? <PenLine className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                    : isGallery
+                                                                        ? <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        : <BookMarked className="h-3.5 w-3.5 text-muted-foreground" />
+                                                            }
                                                         </div>
                                                         <div className="min-w-0 flex-1">
-                                                            <div className="flex justify-between items-start gap-2">
-                                                                <p className={`text-sm line-clamp-2 leading-snug ${!notif.isRead ? "font-bold text-foreground" : "font-medium text-foreground/90"}`}>{prefix} &ldquo;{rawTitle}&rdquo;</p>
-                                                                {!notif.isRead && (
-                                                                    <span className="w-2 h-2 rounded-full bg-primary mt-1.5 flex-shrink-0" />
-                                                                )}
-                                                            </div>
-                                                            <p className="text-xs text-muted-foreground mt-0.5 font-medium">{notif.subtitle} · {timeAgo(notif.createdAt, lang)}</p>
+                                                            <p className={`text-sm leading-snug line-clamp-1 mb-0.5 ${!notif.isRead ? "font-semibold text-foreground" : "font-medium text-foreground/70"}`}>
+                                                                {notif.title}
+                                                            </p>
+                                                            {notif.subtitle && (
+                                                                <p className="text-xs text-muted-foreground/80 line-clamp-1 leading-relaxed mb-1">
+                                                                    {notif.subtitle}
+                                                                </p>
+                                                            )}
+                                                            <p className="text-[11px] text-muted-foreground/50 tracking-wide">
+                                                                {timeAgo(notif.createdAt, lang)}
+                                                            </p>
                                                         </div>
-                                                    </Link>
+                                                    </button>
                                                 );
                                             })}
                                         </div>

@@ -102,6 +102,8 @@ export async function POST(
 
         if (notifyUserIds.size > 0) {
             const commenterUsername = (session?.user as any)?.username ?? "Someone";
+            // Use the new comment ID as hash anchor so the browser scrolls directly to it
+            const commentAnchor = `#comment-${comment.id}`;
             await prisma.notification.createMany({
                 data: Array.from(notifyUserIds).map(uid => ({
                     userId: uid,
@@ -110,7 +112,7 @@ export async function POST(
                         ? `${commenterUsername} replied to a comment`
                         : `${commenterUsername} commented on "${note.title}"`,
                     subtitle: content.trim().substring(0, 80),
-                    href: `/notes/${params.id}`,
+                    href: `/notes/${params.id}${commentAnchor}`,
                 })),
             });
         }

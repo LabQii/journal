@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Search, Plus, LayoutGrid, Loader2, ExternalLink, Pencil, Trash2, X, Check, Smile, CloudRain, Zap, Coffee, Star, MoreVertical, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
-import { usePolling } from "@/hooks/usePolling";
 
 // ─── Constants ──────────────────────────────────────────────────────
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -295,11 +294,6 @@ export default function NotesPage() {
     }, []);
 
     useEffect(() => { fetchNotes(); }, [fetchNotes]);
-
-    // Background polling — re-fetch every 30s when tab is visible
-    // Paused while compose/edit dialogs are open to avoid stale‑write conflicts
-    usePolling(fetchNotes, 30_000, !isComposing && !edit.note);
-
 
     // Memoized — only recomputes when deferred values change, never on raw keystroke
     const filteredNotes = useMemo(() => {

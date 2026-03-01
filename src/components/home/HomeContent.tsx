@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { ArrowRight, PenLine, BookMarked, ChevronRight, BookOpen, Sparkles, Smile, CloudRain, Zap, Coffee, Star, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { usePolling } from "@/hooks/usePolling";
 
 const fadeIn = {
     hidden: { opacity: 0, y: 20 },
@@ -84,13 +82,6 @@ interface HomeContentProps {
 
 export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeContentProps) {
     const { lang, t } = useLanguage();
-    const router = useRouter();
-
-    // Background polling: silently refreshes this server component's props every 30s
-    // to keep the dashboard (latest books, recent notes) up to date automatically
-    usePolling(() => {
-        router.refresh();
-    }, 30_000, isLoggedIn);
 
     function getBookLabel(book: BookData): string | null {
         if (isBookNew(book.createdAt) || (book.parts[0] && isBookNew(book.parts[0].createdAt))) {
@@ -248,7 +239,7 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
             )}
 
             {/* Latest Books Section */}
-            <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={stagger} className={`pb-20 ${isLoggedIn ? "mt-8 sm:mt-12" : "mt-16 sm:mt-28"}`}>
+            <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={stagger} className={`pb-20 ${isLoggedIn ? "mt-4 sm:mt-6" : "mt-8 sm:mt-12"}`}>
                 <div className="flex items-end justify-between border-b border-border/50 pb-4">
                     <motion.div variants={fadeIn} className="flex items-center gap-3">
                         <div className="h-6 w-1 rounded-full bg-secondary"></div>
