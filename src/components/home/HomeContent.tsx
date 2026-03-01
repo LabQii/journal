@@ -37,6 +37,7 @@ export interface NoteData {
     imageUrl: string | null;
     createdAt: string;
     _count?: { comments: number };
+    user?: { username: string; role: "king" | "queen" } | null;
 }
 
 const NOTE_CATEGORIES = [
@@ -185,42 +186,56 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                                     const imgSrc = getCategoryImage(note.category, note.imageUrl);
                                     return (
                                         <motion.div variants={fadeIn} key={note.id}
-                                            className="group relative rounded-2xl border border-border bg-card/50 overflow-hidden hover:shadow-[0_8px_30px_rgba(248,200,220,0.15)] hover:-translate-y-1 transition-all duration-300 backdrop-blur-sm flex flex-col snap-start flex-shrink-0 w-[82vw] sm:w-72 md:w-80 lg:w-[340px]"
+                                            className="group relative bg-card/40 backdrop-blur-sm border border-border hover:border-primary/40 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col animate-fadeIn flex-shrink-0 w-[82vw] sm:w-72 md:w-80 lg:w-[340px] snap-start"
                                         >
-                                            <Link href={`/notes/${note.id}`} className="flex flex-col h-full w-full">
-                                                {noteIsNew && (
-                                                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md">
-                                                        {lang === "id" ? "✦ BARU" : lang === "jp" ? "✦ 新着" : "✦ NEW"}
-                                                    </div>
-                                                )}
+                                            {noteIsNew && (
+                                                <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md">
+                                                    ✦ {lang === "id" ? "BARU" : lang === "jp" ? "新着" : "NEW"}
+                                                </div>
+                                            )}
+                                            <Link href={`/notes/${note.id}`} className="block">
                                                 <div className="aspect-video w-full overflow-hidden bg-muted">
                                                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                                                    <img src={imgSrc} alt={note.title}
+                                                    <img
+                                                        src={imgSrc}
+                                                        alt={note.title}
+                                                        loading="lazy"
+                                                        decoding="async"
                                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                        onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_NOTE_IMAGE; }} />
+                                                        onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_NOTE_IMAGE; }}
+                                                    />
                                                 </div>
-                                                <div className="p-5 flex flex-col flex-1">
-                                                    <div className="flex items-center gap-2 mb-3">
-                                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${catStyle.bg} ${catStyle.text}`}>
-                                                            <CatIcon className="h-3 w-3" />{note.category}
-                                                        </span>
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {new Date(note.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" })}
+                                            </Link>
+                                            <Link href={`/notes/${note.id}`} className="flex flex-col flex-1 p-4">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${catStyle.bg} ${catStyle.text}`}>
+                                                        <CatIcon className="h-3 w-3" />
+                                                        {lang === "id" ? (note.category === "All Notes" ? "Semua Catatan" : note.category) : (note.category === "Bahagia" ? "Happy" : note.category === "Sedih" ? "Sad" : note.category === "Produktif" ? "Productive" : note.category === "Santai" ? "Relaxing" : note.category === "Penting" ? "Important" : note.category)}
+                                                    </span>
+                                                </div>
+                                                <h3 className="text-base font-bold mb-1 group-hover:text-primary transition-colors line-clamp-2">{note.title}</h3>
+                                                <p className="text-muted-foreground text-xs line-clamp-2 flex-1 mb-3">
+                                                    {note.content.substring(0, 120)}{note.content.length > 120 ? "..." : ""}
+                                                </p>
+                                                <div className="flex items-center justify-between mt-auto gap-1 flex-wrap">
+                                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                                        {note.user && (
+                                                            <span className="flex items-center gap-1 text-[10px] font-semibold bg-muted px-2 py-0.5 rounded-full border border-border/50">
+                                                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${note.user.role === "king" ? "bg-amber-500" : "bg-rose-500"}`} />
+                                                                {note.user.username}
+                                                            </span>
+                                                        )}
+                                                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${(note._count?.comments ?? 0) > 0
+                                                            ? "bg-primary/20 border-primary/30 text-pink-600 dark:text-pink-400"
+                                                            : "bg-muted/60 border-border/40 text-muted-foreground/50"
+                                                            }`}>
+                                                            <MessageCircle className="h-3 w-3 flex-shrink-0" />
+                                                            {note._count?.comments ?? 0}
                                                         </span>
                                                     </div>
-                                                    <h3 className="text-base font-bold mb-2 group-hover:text-primary transition-colors line-clamp-1">{note.title}</h3>
-                                                    <p className="text-muted-foreground text-sm line-clamp-2 flex-1">
-                                                        {note.content.substring(0, 120)}{note.content.length > 120 ? "…" : ""}
-                                                    </p>
-                                                    {(note._count?.comments ?? 0) > 0 && (
-                                                        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border/40">
-                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground bg-muted/80 border border-border/60 px-2 py-0.5 rounded-full">
-                                                                <MessageCircle className="h-3 w-3" />
-                                                                {note._count!.comments}
-                                                            </span>
-                                                            <span className="text-[10px] text-muted-foreground/60">{lang === "id" ? "komentar" : lang === "jp" ? "コメント" : "comments"}</span>
-                                                        </div>
-                                                    )}
+                                                    <span className="text-[11px] text-muted-foreground/60 font-medium ml-auto">
+                                                        {new Date(note.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                                                    </span>
                                                 </div>
                                             </Link>
                                         </motion.div>

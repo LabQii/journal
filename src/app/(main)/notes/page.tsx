@@ -172,8 +172,8 @@ const NoteCard = memo(function NoteCard({
                             </span>
                         )}
                         {/* Comment count — always shown */}
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${(note._count?.comments ?? 0) > 0
-                            ? "bg-primary/10 border-primary/20 text-primary"
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-full border ${(note._count?.comments ?? 0) > 0
+                            ? "bg-primary/20 border-primary/30 text-pink-600 dark:text-pink-400"
                             : "bg-muted/60 border-border/40 text-muted-foreground/50"
                             }`}>
                             <MessageCircle className="h-3 w-3 flex-shrink-0" />

@@ -29,7 +29,14 @@ export default async function Home() {
     }),
     // Skip DB query entirely for guests — saves a round-trip
     isLoggedIn
-      ? prisma.note.findMany({ orderBy: { createdAt: "desc" }, take: 5 })
+      ? prisma.note.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 5,
+        include: {
+          user: { select: { username: true, role: true } },
+          _count: { select: { comments: true } },
+        },
+      })
       : Promise.resolve([]),
   ]);
 
