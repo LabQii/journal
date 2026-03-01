@@ -2,6 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/authGuard";
 
+export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    try {
+        const { id } = await params;
+        const note = await prisma.note.findUnique({
+            where: { id },
+            include: { user: { select: { username: true, role: true } }, _count: { select: { comments: true } } }
+        });
+        if (!note) return NextResponse.json({ error: "Note not found" }, { status: 404 });
+        return NextResponse.json(note);
+    } catch (error) {
+        console.error("Failed to fetch note:", error);
+        return NextResponse.json({ error: "Failed to fetch note" }, { status: 500 });
+    }
+}
+
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const auth = await requireAuth("king");
     if (auth instanceof NextResponse) return auth;

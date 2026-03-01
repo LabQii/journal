@@ -13,8 +13,14 @@ export async function GET(req: NextRequest) {
         const notes = await prisma.note.findMany({
             where: category ? { category: category } : {},
             orderBy: { createdAt: "desc" },
+            include: {
+                user: { select: { username: true, role: true } },
+                _count: { select: { comments: true } }
+            }
         });
-        return NextResponse.json(notes);
+        const res = NextResponse.json(notes);
+        res.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=300");
+        return res;
     } catch (error) {
         console.error("Failed to fetch notes:", error);
         return NextResponse.json({ error: "Failed to fetch notes" }, { status: 500 });
@@ -29,6 +35,9 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const validatedData = createNoteSchema.parse(body);
 
+        const session = await getServerSession(authOptions);
+        const creatorId = session?.user ? (session.user as any).id : null;
+
         const note = await prisma.note.create({
             data: {
                 title: validatedData.title,
@@ -36,12 +45,11 @@ export async function POST(req: NextRequest) {
                 url: validatedData.url ?? null,
                 category: validatedData.category ?? "Santai",
                 imageUrl: validatedData.imageUrl ?? null,
+                userId: creatorId,
             },
         });
 
         // Notify all other users
-        const session = await getServerSession(authOptions);
-        const creatorId = session?.user ? (session.user as any).id : null;
         if (creatorId) {
             const otherUsers = await prisma.user.findMany({
                 where: { id: { not: creatorId } },

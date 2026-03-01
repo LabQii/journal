@@ -20,10 +20,12 @@ export function useLanguage() {
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
     const [lang, setLangState] = useState<Lang>("en");
+    const [mounted, setMounted] = useState(false);
 
     useEffect(() => {
         const saved = localStorage.getItem("cc-lang") as Lang | null;
         if (saved === "en" || saved === "id" || saved === "jp") setLangState(saved);
+        setMounted(true);
     }, []);
 
     const setLang = (l: Lang) => {
@@ -32,7 +34,10 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     };
 
     const t = (key: string): string => {
-        const dict = lang === "en" ? en : lang === "id" ? id : jp;
+        // Before mount: always return English so content is visible immediately
+        // and server/client text output matches (avoids React #418 hydration error
+        // which only fires when server="en" but client renders a different locale)
+        const dict = mounted ? (lang === "en" ? en : lang === "id" ? id : jp) : en;
         return (dict as Record<string, string>)[key] ?? key;
     };
 
@@ -112,6 +117,41 @@ const id: Record<string, string> = {
     notes_delete_confirm: "Yakin ingin menghapus catatan ini? Tindakan ini tidak bisa dibatalkan.",
     notes_delete_btn: "Hapus",
     notes_network_error: "Terjadi kesalahan jaringan.",
+
+    // Comments
+    comment_title: "Komentar",
+    comment_write: "Tulis komentar",
+    comment_write_placeholder: "Bagikan pikiranmu...",
+    comment_post: "Kirim Komentar",
+    comment_reply: "Balas",
+    comment_reply_placeholder: "Tulis balasan...",
+    comment_send_reply: "Kirim",
+    comment_cancel: "Batal",
+    comment_delete: "Hapus",
+    comment_delete_confirm: "Yakin ingin menghapus komentar ini?",
+    comment_empty: "Belum ada komentar. Jadilah yang pertama!",
+    comment_search: "Cari komentar...",
+    comment_no_results: "Tidak ada komentar yang cocok.",
+    comment_login_prompt: "untuk meninggalkan komentar.",
+    comment_login_link: "Masuk",
+    comment_required: "Komentar tidak boleh kosong.",
+    comment_error_network: "Terjadi kesalahan jaringan.",
+    comment_just_now: "Baru saja",
+    comment_minutes_ago: "menit lalu",
+    comment_hours_ago: "jam lalu",
+    comment_days_ago: "hari lalu",
+    comment_edit: "Edit",
+    comment_edit_placeholder: "Edit komentar...",
+    comment_save: "Simpan",
+
+    // Form Validation
+    validation_required: "Wajib diisi.",
+    validation_title_required: "Judul wajib diisi.",
+    validation_content_required: "Konten wajib diisi.",
+    validation_author_required: "Penulis wajib diisi.",
+    validation_cover_required: "Gambar sampul wajib diunggah.",
+    validation_desc_required: "Deskripsi wajib diisi.",
+    validation_photo_required: "Foto wajib dipilih.",
 
     // Books page
     books_h1: "Perpustakaan Kita",
@@ -235,6 +275,41 @@ const en: Record<string, string> = {
     notes_delete_btn: "Delete",
     notes_network_error: "A network error occurred.",
 
+    // Comments
+    comment_title: "Comments",
+    comment_write: "Write a comment",
+    comment_write_placeholder: "Share your thoughts...",
+    comment_post: "Post Comment",
+    comment_reply: "Reply",
+    comment_reply_placeholder: "Write a reply...",
+    comment_send_reply: "Reply",
+    comment_cancel: "Cancel",
+    comment_delete: "Delete",
+    comment_delete_confirm: "Are you sure you want to delete this comment?",
+    comment_empty: "No comments yet. Be the first!",
+    comment_search: "Search comments...",
+    comment_no_results: "No comments match your search.",
+    comment_login_prompt: "to leave a comment.",
+    comment_login_link: "Login",
+    comment_required: "Comment cannot be empty.",
+    comment_error_network: "Network error. Please try again.",
+    comment_just_now: "Just now",
+    comment_minutes_ago: "m ago",
+    comment_hours_ago: "h ago",
+    comment_days_ago: "d ago",
+    comment_edit: "Edit",
+    comment_edit_placeholder: "Edit your comment...",
+    comment_save: "Save",
+
+    // Form Validation
+    validation_required: "Required.",
+    validation_title_required: "Title is required.",
+    validation_content_required: "Content is required.",
+    validation_author_required: "Author is required.",
+    validation_cover_required: "Cover image is required.",
+    validation_desc_required: "Description is required.",
+    validation_photo_required: "Please select a photo.",
+
     books_h1: "Our Library",
     books_subtitle: "Chapters of our journey — longer stories, deeper memories, and meaningful moments we never want to forget.",
     books_add: "Add New Book",
@@ -353,6 +428,41 @@ const jp: Record<string, string> = {
     notes_delete_confirm: "このノートを削除してもよろしいですか？この操作は元に戻せません。",
     notes_delete_btn: "削除",
     notes_network_error: "ネットワークエラーが発生しました。",
+
+    // Comments
+    comment_title: "コメント",
+    comment_write: "コメントを書く",
+    comment_write_placeholder: "あなたの考えをシェアしてください...",
+    comment_post: "コメントを投稿",
+    comment_reply: "返信",
+    comment_reply_placeholder: "返信を書いてください...",
+    comment_send_reply: "返信する",
+    comment_cancel: "キャンセル",
+    comment_delete: "削除",
+    comment_delete_confirm: "このコメントを削除してもよろしいですか？",
+    comment_empty: "まだコメントはありません。最初のコメントをどうぞ！",
+    comment_search: "コメントを検索...",
+    comment_no_results: "該当するコメントはありません。",
+    comment_login_prompt: "コメントを残すには",
+    comment_login_link: "ログイン",
+    comment_required: "コメントは空にできません。",
+    comment_error_network: "ネットワークエラー。もう一度お試しください。",
+    comment_just_now: "たった今",
+    comment_minutes_ago: "分前",
+    comment_hours_ago: "時間前",
+    comment_days_ago: "日前",
+    comment_edit: "編集",
+    comment_edit_placeholder: "コメントを編集...",
+    comment_save: "保存",
+
+    // Form Validation
+    validation_required: "必須項目です。",
+    validation_title_required: "タイトルは必須です。",
+    validation_content_required: "内容は必須です。",
+    validation_author_required: "著者は必須です。",
+    validation_cover_required: "カバー画像は必須です。",
+    validation_desc_required: "説明は必須です。",
+    validation_photo_required: "写真を選択してください。",
 
     books_h1: "私たちのライブラリ",
     books_subtitle: "私たちの旅の章 — 決して忘れたくない長い物語、深い思い出、そして意味のある瞬間。",

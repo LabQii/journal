@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback, memo, useReducer, startTransition } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Camera, X, Download, Maximize2, ZoomIn, ZoomOut, Plus, Loader2, Pencil, Trash2, Check, ImageIcon, Heart } from "lucide-react";
+import { Camera, X, Download, Maximize2, ZoomIn, ZoomOut, Plus, Loader2, Pencil, Trash2, Check, ImageIcon, Heart, MoreVertical } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { SmartImage } from "@/components/SmartImage";
@@ -18,17 +18,22 @@ interface GalleryImage {
 
 // ─── Memoized Card ─────────────────────────────────────────────────
 const GalleryCard = memo(function GalleryCard({
-    img, canCreate, canUpdate, canDelete, onSelect, onEdit, onDelete, onToggleFavorite
+    img, canCreate, canUpdate, canDelete, onSelect, onEdit, onDelete, onToggleFavorite, priority
 }: {
     img: GalleryImage;
     canCreate: boolean;
     canUpdate: boolean;
     canDelete: boolean;
+    priority: boolean;
     onSelect: (img: GalleryImage) => void;
     onEdit: (img: GalleryImage) => void;
     onDelete: (img: GalleryImage) => void;
     onToggleFavorite: (img: GalleryImage) => void;
 }) {
+    const { lang } = useLanguage();
+    const [showMenu, setShowMenu] = useState(false);
+    const hasCrud = canUpdate || canDelete;
+
     return (
         <div className="group relative cursor-pointer animate-fadeIn">
             <div
@@ -39,9 +44,11 @@ const GalleryCard = memo(function GalleryCard({
                     src={img.photoUrl}
                     alt={img.description || "Gallery image"}
                     fill
+                    priority={priority}
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                     className="object-cover transition-transform duration-500 group-hover:scale-110 will-change-transform"
                 />
+                {/* Desktop overlay — hover only */}
                 <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5 pointer-events-none">
                     <div className="translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
                         {img.description && (
@@ -55,7 +62,7 @@ const GalleryCard = memo(function GalleryCard({
                         </div>
                     </div>
                 </div>
-                {/* Anyone logged in (canCreate = true) can favorite */}
+                {/* Favorite button */}
                 {canCreate && (
                     <button
                         onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleFavorite(img); }}
@@ -70,29 +77,92 @@ const GalleryCard = memo(function GalleryCard({
                         />
                     </button>
                 )}
+                {/* Desktop CRUD hover icons */}
+                {hasCrud && (
+                    <div className="hidden md:flex absolute top-2 left-2 gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+                        {canUpdate && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onEdit(img); }}
+                                className="p-2 rounded-xl bg-background/80 backdrop-blur-md border border-border/50 text-foreground hover:text-primary hover:bg-background transition-colors shadow-sm"
+                                aria-label="Edit image"
+                            >
+                                <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                        {canDelete && (
+                            <button
+                                onClick={(e) => { e.stopPropagation(); onDelete(img); }}
+                                className="p-2 rounded-xl bg-background/80 backdrop-blur-md border border-border/50 text-foreground hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shadow-sm"
+                                aria-label="Delete image"
+                            >
+                                <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                        )}
+                    </div>
+                )}
+                {/* Mobile ⋮ menu trigger */}
+                {hasCrud && (
+                    <button
+                        onClick={(e) => { e.stopPropagation(); setShowMenu(true); }}
+                        className="md:hidden absolute top-2 left-2 z-10 p-1.5 rounded-full bg-background/80 backdrop-blur-md border border-border/50 text-foreground shadow-sm"
+                        aria-label="More options"
+                    >
+                        <MoreVertical className="h-4 w-4" />
+                    </button>
+                )}
             </div>
-            {(canUpdate || canDelete) && (
-                <div className="absolute top-2 left-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                    {canUpdate && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onEdit(img); }}
-                            className="p-2 rounded-xl bg-background/80 backdrop-blur-md border border-border/50 text-foreground hover:text-primary hover:bg-background transition-colors shadow-sm"
-                            aria-label="Edit image"
+
+            {/* Mobile Bottom Sheet */}
+            <AnimatePresence>
+                {showMenu && (
+                    <>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                            onClick={() => setShowMenu(false)}
+                        />
+                        <motion.div
+                            initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                            transition={{ type: "spring", stiffness: 400, damping: 40 }}
+                            className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl border-t border-border shadow-2xl p-4 pb-8 space-y-3"
                         >
-                            <Pencil className="h-3.5 w-3.5" />
-                        </button>
-                    )}
-                    {canDelete && (
-                        <button
-                            onClick={(e) => { e.stopPropagation(); onDelete(img); }}
-                            className="p-2 rounded-xl bg-background/80 backdrop-blur-md border border-border/50 text-foreground hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors shadow-sm"
-                            aria-label="Delete image"
-                        >
-                            <Trash2 className="h-3.5 w-3.5" />
-                        </button>
-                    )}
-                </div>
-            )}
+                            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+                            <p className="text-sm font-semibold text-center text-muted-foreground mb-4">
+                                {img.description || (lang === "id" ? "Foto" : "Photo")}
+                            </p>
+                            {canUpdate && (
+                                <button
+                                    onClick={() => { setShowMenu(false); onEdit(img); }}
+                                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-muted/60 hover:bg-primary/10 transition-colors text-left"
+                                >
+                                    <div className="p-2 rounded-xl bg-primary/10">
+                                        <Pencil className="h-4 w-4 text-primary" />
+                                    </div>
+                                    <span className="font-medium">{lang === "id" ? "Edit Foto" : "Edit Photo"}</span>
+                                </button>
+                            )}
+                            {canDelete && (
+                                <button
+                                    onClick={() => { setShowMenu(false); onDelete(img); }}
+                                    className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-muted/60 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors text-left"
+                                >
+                                    <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/30">
+                                        <Trash2 className="h-4 w-4 text-rose-500" />
+                                    </div>
+                                    <span className="font-medium text-rose-600 dark:text-rose-400">{lang === "id" ? "Hapus Foto" : "Delete Photo"}</span>
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setShowMenu(false)}
+                                className="w-full flex items-center justify-center gap-2 p-3.5 rounded-2xl bg-muted hover:bg-muted/80 transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                                <span className="font-medium">{lang === "id" ? "Batal" : "Cancel"}</span>
+                            </button>
+                        </motion.div>
+                    </>
+                )}
+            </AnimatePresence>
         </div>
     );
 });
@@ -364,10 +434,11 @@ export default function GalleryPage() {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-6">
-                    {images.map((img) => (
+                    {images.map((img, i) => (
                         <GalleryCard
                             key={img.id}
                             img={img}
+                            priority={i < 8}
                             canCreate={canCreate}
                             canUpdate={canUpdate}
                             canDelete={canDelete}
@@ -393,8 +464,8 @@ export default function GalleryPage() {
                             </div>
                             <div className="p-6 overflow-y-auto flex-1 space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Photo</label>
-                                    <div className="w-full rounded-xl border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
+                                    <label className="text-sm font-medium">Photo <span className="text-rose-500">*</span></label>
+                                    <div className={`w-full rounded-xl border-2 border-dashed bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden ${add.error && !add.file ? "border-rose-400" : "border-border"}`}
                                         onClick={() => newFileInputRef.current?.click()}>
                                         {add.preview ? (
                                             <div className="aspect-video w-full relative">
@@ -415,7 +486,7 @@ export default function GalleryPage() {
                                     {add.error && <p className="text-xs text-rose-500">{add.error}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("gallery_desc")}</label>
+                                    <label className="text-sm font-medium">{t("gallery_desc")} <span className="text-muted-foreground font-normal text-xs ml-1">(Optional)</span></label>
                                     <textarea
                                         rows={3}
                                         value={add.description}
@@ -473,7 +544,7 @@ export default function GalleryPage() {
                                     {!edit.file && <p className="text-xs text-muted-foreground">{lang === "id" ? "Tidak ada file baru dipilih — foto saat ini akan dipertahankan." : lang === "jp" ? "新しいファイルが選択されていません — 現在の写真が保持されます。" : "No new file selected — current photo will be kept."}</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("gallery_desc")}</label>
+                                    <label className="text-sm font-medium">{t("gallery_desc")} <span className="text-muted-foreground font-normal text-xs ml-1">(Optional)</span></label>
                                     <textarea
                                         rows={3}
                                         value={edit.description}

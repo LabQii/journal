@@ -120,6 +120,7 @@ export default function BooksPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [isCreating, setIsCreating] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    const [touched, setTouched] = useState(false);
     const [selectedBook, setSelectedBook] = useState<Book | null>(null); // Added for handleToggleFavorite
     const { t, lang } = useLanguage();
     const { canCreate, canUpdate } = useAuth();
@@ -197,11 +198,16 @@ export default function BooksPage() {
 
     const resetForm = useCallback(() => {
         dispatchForm({ type: "RESET" });
+        setTouched(false);
     }, []);
 
     const handleCreateBook = useCallback(async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!form.coverFile) { dispatchForm({ type: "SET_COVER_ERROR", msg: "Please select a cover image." }); return; }
+        setTouched(true);
+        if (!form.title.trim() || !form.author.trim() || !form.description.trim() || !form.coverFile) {
+            if (!form.coverFile) dispatchForm({ type: "SET_COVER_ERROR", msg: "Please select a cover image." });
+            return;
+        }
         setIsSaving(true);
         try {
             let coverUrl: string;
@@ -297,24 +303,28 @@ export default function BooksPage() {
                                     <X className="h-5 w-5" />
                                 </button>
                             </div>
-                            <form onSubmit={handleCreateBook} className="p-6 overflow-y-auto flex-1 space-y-4">
+                            <form noValidate onSubmit={handleCreateBook} className="p-6 overflow-y-auto flex-1 space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("books_form_title")}</label>
+                                    <label className="text-sm font-medium">{t("books_form_title")} <span className="text-rose-500">*</span></label>
                                     <input type="text" required value={form.title}
-                                        onChange={e => dispatchForm({ type: "SET", field: "title", value: e.target.value })}
-                                        className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                                        onChange={e => { dispatchForm({ type: "SET", field: "title", value: e.target.value }); if (touched) setTouched(false); }}
+                                        onBlur={() => setTouched(true)}
+                                        className={`w-full bg-muted/50 border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all ${touched && !form.title.trim() ? "border-rose-400" : "border-border"}`}
                                         placeholder={lang === "id" ? "Perjalanan Epik..." : lang === "jp" ? "素晴らしい旅..." : "Epic Journey..."} />
+                                    {touched && !form.title.trim() && <p className="text-xs text-rose-500 mt-1">Title is required.</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("books_form_author")}</label>
+                                    <label className="text-sm font-medium">{t("books_form_author")} <span className="text-rose-500">*</span></label>
                                     <input type="text" required value={form.author}
-                                        onChange={e => dispatchForm({ type: "SET", field: "author", value: e.target.value })}
-                                        className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all"
+                                        onChange={e => { dispatchForm({ type: "SET", field: "author", value: e.target.value }); if (touched) setTouched(false); }}
+                                        onBlur={() => setTouched(true)}
+                                        className={`w-full bg-muted/50 border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all ${touched && !form.author.trim() ? "border-rose-400" : "border-border"}`}
                                         placeholder={lang === "id" ? "Nama Penulis" : lang === "jp" ? "著者名" : "Jane Doe"} />
+                                    {touched && !form.author.trim() && <p className="text-xs text-rose-500 mt-1">Author is required.</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("books_form_cover")}</label>
-                                    <div className="w-full rounded-xl border-2 border-dashed border-border bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden"
+                                    <label className="text-sm font-medium">{t("books_form_cover")} <span className="text-rose-500">*</span></label>
+                                    <div className={`w-full rounded-xl border-2 border-dashed bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden ${touched && !form.coverFile ? "border-rose-400" : "border-border"}`}
                                         onClick={() => coverInputRef.current?.click()}>
                                         {form.coverPreview ? (
                                             <div className="relative aspect-[2/3] max-h-48 mx-auto">
@@ -333,13 +343,16 @@ export default function BooksPage() {
                                     </div>
                                     <input ref={coverInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleCoverFileChange} />
                                     {form.coverError && <p className="text-xs text-rose-500 mt-1">{form.coverError}</p>}
+                                    {touched && !form.coverFile && !form.coverError && <p className="text-xs text-rose-500 mt-1">Cover image is required.</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">{t("books_form_desc")}</label>
+                                    <label className="text-sm font-medium">{t("books_form_desc")} <span className="text-rose-500">*</span></label>
                                     <textarea required rows={4} value={form.description}
-                                        onChange={e => dispatchForm({ type: "SET", field: "description", value: e.target.value })}
-                                        className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none"
+                                        onChange={e => { dispatchForm({ type: "SET", field: "description", value: e.target.value }); if (touched) setTouched(false); }}
+                                        onBlur={() => setTouched(true)}
+                                        className={`w-full bg-muted/50 border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none ${touched && !form.description.trim() ? "border-rose-400" : "border-border"}`}
                                         placeholder={lang === "id" ? "Cerita tentang..." : lang === "jp" ? "物語について..." : "A story about..."} />
+                                    {touched && !form.description.trim() && <p className="text-xs text-rose-500 mt-1">Description is required.</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">{t("books_form_status")}</label>

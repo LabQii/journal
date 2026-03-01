@@ -8,13 +8,16 @@ datasource db {
 }
 
 model Note {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   title     String
   content   String
   url       String?
-  category  String   @default("Santai")
+  category  String    @default("Santai")
   imageUrl  String?
-  createdAt DateTime @default(now())
+  userId    String?
+  createdAt DateTime  @default(now())
+  user      User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  comments  Comment[]
 }
 
 model Book {
@@ -63,6 +66,23 @@ model User {
   bookFavorites    BookFavorite[]
   galleryFavorites GalleryFavorite[]
   notifications    Notification[]
+  notes            Note[]
+  comments         Comment[]
+}
+
+model Comment {
+  id        String    @id @default(cuid())
+  noteId    String
+  userId    String
+  content   String
+  parentId  String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  note      Note      @relation(fields: [noteId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parent    Comment?  @relation("replies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   Comment[] @relation("replies")
 }
 
 model BookFavorite {

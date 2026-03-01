@@ -1,24 +1,9 @@
 /**
- * SmartImage
- *
- * Uses next/image for Supabase URLs (where we control the domain + have
- * optimized WebP files after compression). Falls back to a plain <img>
- * for any legacy external URL already stored in the database (Google, iStock,
- * etc.) — avoids the "hostname not configured" runtime error without
- * having to enumerate every possible external domain.
+ * SmartImage — always renders a plain <img> for direct browser fetching.
+ * We previously used next/image for Supabase URLs, but the server-side proxy
+ * caused 7s timeouts in dev/serverless. Supabase Storage already serves
+ * WebP files with CDN caching, so next/image optimization adds no benefit.
  */
-
-import Image from "next/image";
-
-const SUPABASE_HOST = "supabase.co";
-
-function isSupabaseUrl(src: string): boolean {
-    try {
-        return new URL(src).hostname.endsWith(SUPABASE_HOST);
-    } catch {
-        return false;
-    }
-}
 
 interface SmartImageProps {
     src: string;
@@ -35,29 +20,16 @@ export function SmartImage({
     src,
     alt,
     fill,
-    sizes,
+    sizes: _sizes,
     className,
     priority,
     style,
     onClick,
 }: SmartImageProps) {
-    if (isSupabaseUrl(src)) {
-        return (
-            <Image
-                src={src}
-                alt={alt}
-                fill={fill}
-                sizes={sizes}
-                className={className}
-                priority={priority}
-                style={style}
-                onClick={onClick}
-            />
-        );
-    }
+    const fillStyle: React.CSSProperties = fill
+        ? { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }
+        : {};
 
-    // Legacy external URL — render a plain <img> with lazy loading
-    // (no domain config needed, no next/image optimization overhead)
     return (
         // eslint-disable-next-line @next/next/no-img-element
         <img
@@ -66,7 +38,7 @@ export function SmartImage({
             loading={priority ? "eager" : "lazy"}
             decoding="async"
             className={className}
-            style={fill ? { position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", ...style } : style}
+            style={{ ...fillStyle, ...style }}
             onClick={onClick}
         />
     );

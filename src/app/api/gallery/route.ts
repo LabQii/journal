@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { createGallerySchema } from "@/lib/validations";
 import { requireAuth } from "@/lib/authGuard";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
@@ -36,7 +34,10 @@ export async function GET() {
                 return a.isFavorite ? -1 : 1;
             });
 
-        return NextResponse.json(mappedImages);
+        const res = NextResponse.json(mappedImages);
+        // Cache per-user for 30s; stale content served for up to 5min while revalidating
+        res.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=300");
+        return res;
     } catch (error) {
         console.error("Failed to fetch gallery images:", error);
         return NextResponse.json({ error: "Failed to fetch gallery images" }, { status: 500 });

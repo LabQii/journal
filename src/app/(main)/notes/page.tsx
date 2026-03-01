@@ -3,9 +3,10 @@
 import { useState, useEffect, useCallback, useReducer, startTransition, memo, useDeferredValue, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Plus, LayoutGrid, Loader2, ExternalLink, Pencil, Trash2, X, Check, Smile, CloudRain, Zap, Coffee, Star } from "lucide-react";
+import { Search, Plus, LayoutGrid, Loader2, ExternalLink, Pencil, Trash2, X, Check, Smile, CloudRain, Zap, Coffee, Star, MoreVertical, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
+import { usePolling } from "@/hooks/usePolling";
 
 // ─── Constants ──────────────────────────────────────────────────────
 const CATEGORY_IMAGES: Record<string, string> = {
@@ -23,7 +24,7 @@ function getCategoryImage(category: string, imageUrl: string | null): string {
 }
 
 const CATEGORIES = [
-    { name: "All Notes", icon: LayoutGrid, color: "text-foreground", bg: "bg-muted/60", activeBg: "bg-primary/20", activeText: "text-primary" },
+    { name: "All Notes", icon: LayoutGrid, color: "text-foreground", bg: "bg-muted/60", activeBg: "bg-pink-100 dark:bg-pink-900/40", activeText: "text-pink-500 dark:text-pink-400" },
     { name: "Bahagia", icon: Smile, color: "text-amber-500", bg: "bg-amber-50 dark:bg-amber-500/10", activeBg: "bg-amber-100 dark:bg-amber-500/20", activeText: "text-amber-600 dark:text-amber-400" },
     { name: "Sedih", icon: CloudRain, color: "text-blue-500", bg: "bg-blue-50 dark:bg-blue-500/10", activeBg: "bg-blue-100 dark:bg-blue-500/20", activeText: "text-blue-600 dark:text-blue-400" },
     { name: "Produktif", icon: Zap, color: "text-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-500/10", activeBg: "bg-emerald-100 dark:bg-emerald-500/20", activeText: "text-emerald-600 dark:text-emerald-400" },
@@ -54,6 +55,8 @@ interface Note {
     id: string; title: string; content: string;
     url: string | null; category: string;
     imageUrl: string | null; createdAt: string;
+    user?: { username: string; role: "king" | "queen" } | null;
+    _count?: { comments: number };
 }
 
 // ─── Create-form reducer (6 useState → 1) ───────────────────────────
@@ -101,9 +104,12 @@ const NoteCard = memo(function NoteCard({
     onEdit: (n: Note) => void; onDelete: (n: Note) => void;
 }) {
     const { lang } = useLanguage();
+    const [showMenu, setShowMenu] = useState(false);
     const catStyle = getCategoryStyle(note.category);
     const noteIsNew = isNew(note.createdAt);
     const imgSrc = getCategoryImage(note.category, note.imageUrl);
+    const hasCrud = canUpdate || canDelete;
+
     return (
         <div className="group relative bg-card/40 backdrop-blur-sm border border-border hover:border-primary/40 rounded-2xl overflow-hidden hover:shadow-lg transition-all duration-300 flex flex-col animate-fadeIn">
             {noteIsNew && (
@@ -111,8 +117,10 @@ const NoteCard = memo(function NoteCard({
                     ✦ {lang === "id" ? "BARU" : lang === "jp" ? "新着" : "NEW"}
                 </div>
             )}
-            {(canUpdate || canDelete) && (
-                <div className="absolute top-3 left-3 z-10 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+
+            {/* Desktop hover-only CRUD icons (hidden on touch devices) */}
+            {hasCrud && (
+                <div className="hidden md:flex absolute top-3 left-3 z-10 gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     {canUpdate && (
                         <button onClick={() => onEdit(note)} className="p-1.5 rounded-lg bg-background/80 backdrop-blur-md border border-border/50 text-foreground hover:text-primary transition-colors">
                             <Pencil className="h-3 w-3" />
@@ -125,6 +133,7 @@ const NoteCard = memo(function NoteCard({
                     )}
                 </div>
             )}
+
             {/* Thumbnail — no layout shift: aspect-video reserves space */}
             <Link href={`/notes/${note.id}`} className="block">
                 <div className="aspect-video w-full overflow-hidden bg-muted">
@@ -153,11 +162,96 @@ const NoteCard = memo(function NoteCard({
                 <p className="text-muted-foreground text-xs line-clamp-2 flex-1 mb-3">
                     {note.content.substring(0, 120)}{note.content.length > 120 ? "..." : ""}
                 </p>
-                <span className="text-xs text-muted-foreground/60">
-                    {new Date(note.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
-                </span>
-            </Link>
-        </div>
+                <div className="flex items-center justify-between mt-auto gap-1 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                        {/* Author pill */}
+                        {note.user && (
+                            <span className="flex items-center gap-1 text-[10px] font-semibold bg-muted px-2 py-0.5 rounded-full border border-border/50">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${note.user.role === "king" ? "bg-amber-500" : "bg-rose-500"}`} />
+                                {note.user.username}
+                            </span>
+                        )}
+                        {/* Comment count — always shown */}
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border ${(note._count?.comments ?? 0) > 0
+                            ? "bg-primary/10 border-primary/20 text-primary"
+                            : "bg-muted/60 border-border/40 text-muted-foreground/50"
+                            }`}>
+                            <MessageCircle className="h-3 w-3 flex-shrink-0" />
+                            {note._count?.comments ?? 0}
+                        </span>
+                    </div>
+                    {/* Date */}
+                    <span className="text-[11px] text-muted-foreground/60 font-medium ml-auto">
+                        {new Date(note.createdAt).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" })}
+                    </span>
+                    {/* Mobile ⋮ button — only visible on touch devices */}
+                    {hasCrud && (
+                        <button
+                            onClick={(e) => { e.preventDefault(); setShowMenu(true); }}
+                            className="md:hidden p-1.5 rounded-lg bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+                            aria-label="More options"
+                        >
+                            <MoreVertical className="h-4 w-4" />
+                        </button>
+                    )}
+                </div>
+            </Link >
+
+            {/* Mobile Bottom Sheet Action Menu */}
+            <AnimatePresence>
+                {
+                    showMenu && (
+                        <>
+                            {/* Backdrop */}
+                            <motion.div
+                                initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm"
+                                onClick={() => setShowMenu(false)}
+                            />
+                            {/* Sheet */}
+                            <motion.div
+                                initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
+                                transition={{ type: "spring", stiffness: 400, damping: 40 }}
+                                className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-3xl border-t border-border shadow-2xl p-4 pb-8 space-y-3"
+                            >
+                                {/* Handle bar */}
+                                <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-4" />
+                                <p className="text-sm font-semibold text-center text-muted-foreground mb-4">{note.title}</p>
+                                {canUpdate && (
+                                    <button
+                                        onClick={() => { setShowMenu(false); onEdit(note); }}
+                                        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-muted/60 hover:bg-primary/10 transition-colors text-left"
+                                    >
+                                        <div className="p-2 rounded-xl bg-primary/10">
+                                            <Pencil className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <span className="font-medium">{lang === "id" ? "Edit Catatan" : lang === "jp" ? "編集" : "Edit Note"}</span>
+                                    </button>
+                                )}
+                                {canDelete && (
+                                    <button
+                                        onClick={() => { setShowMenu(false); onDelete(note); }}
+                                        className="w-full flex items-center gap-3 p-3.5 rounded-2xl bg-muted/60 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors text-left"
+                                    >
+                                        <div className="p-2 rounded-xl bg-rose-100 dark:bg-rose-900/30">
+                                            <Trash2 className="h-4 w-4 text-rose-500" />
+                                        </div>
+                                        <span className="font-medium text-rose-600 dark:text-rose-400">{lang === "id" ? "Hapus Catatan" : lang === "jp" ? "削除" : "Delete Note"}</span>
+                                    </button>
+                                )}
+                                <button
+                                    onClick={() => setShowMenu(false)}
+                                    className="w-full flex items-center justify-center gap-2 p-3.5 rounded-2xl bg-muted hover:bg-muted/80 transition-colors"
+                                >
+                                    <X className="h-4 w-4" />
+                                    <span className="font-medium">{lang === "id" ? "Batal" : lang === "jp" ? "キャンセル" : "Cancel"}</span>
+                                </button>
+                            </motion.div>
+                        </>
+                    )
+                }
+            </AnimatePresence >
+        </div >
     );
 });
 
@@ -188,8 +282,6 @@ export default function NotesPage() {
     const [create, dispatchCreate] = useReducer(createReducer, createInit);
     const [edit, dispatchEdit] = useReducer(editReducer, editInit);
 
-    useEffect(() => { fetchNotes(); }, []);
-
     const fetchNotes = useCallback(async () => {
         setIsLoading(true);
         try {
@@ -201,6 +293,13 @@ export default function NotesPage() {
         } catch (e) { console.error(e); }
         finally { setIsLoading(false); }
     }, []);
+
+    useEffect(() => { fetchNotes(); }, [fetchNotes]);
+
+    // Background polling — re-fetch every 30s when tab is visible
+    // Paused while compose/edit dialogs are open to avoid stale‑write conflicts
+    usePolling(fetchNotes, 30_000, !isComposing && !edit.note);
+
 
     // Memoized — only recomputes when deferred values change, never on raw keystroke
     const filteredNotes = useMemo(() => {
@@ -339,20 +438,28 @@ export default function NotesPage() {
                             exit={{ opacity: 0, height: 0, scale: 0.95 }}
                             className="bg-card/80 backdrop-blur-md border border-primary/20 rounded-2xl p-5 shadow-lg overflow-hidden"
                         >
-                            <input
-                                type="text" placeholder={t("notes_title_placeholder")}
-                                value={create.title}
-                                onChange={e => dispatchCreate({ type: "SET", field: "title", value: e.target.value })}
-                                className="w-full bg-transparent border-none text-xl font-bold placeholder:text-muted-foreground/50 focus:outline-none mb-3 outline-none"
-                            />
-                            <textarea
-                                placeholder={t("notes_content_placeholder")}
-                                value={create.content}
-                                onChange={e => dispatchCreate({ type: "SET", field: "content", value: e.target.value })}
-                                rows={4}
-                                className="w-full bg-transparent border-none resize-none placeholder:text-muted-foreground/50 focus:outline-none text-sm mb-3 outline-none"
-                            />
-                            <div className="mb-3">
+                            <div className="relative">
+                                <input
+                                    type="text" placeholder={t("notes_title_placeholder")}
+                                    value={create.title}
+                                    onChange={e => dispatchCreate({ type: "SET", field: "title", value: e.target.value })}
+                                    className={`w-full bg-transparent border-b-2 text-xl font-bold placeholder:text-muted-foreground/50 focus:outline-none mb-1 outline-none pr-6 ${create.error && !create.title.trim() ? "border-rose-400" : "border-transparent focus:border-primary/50"}`}
+                                />
+                                <span className="absolute right-2 top-1 text-rose-500 font-bold">*</span>
+                            </div>
+                            {!create.title.trim() && create.error && <p className="text-xs text-rose-500 mb-2 mt-1">Title is required.</p>}
+                            <div className={`relative mt-4 border-2 rounded-xl p-2 ${create.error && !create.content.trim() ? "border-rose-400 bg-rose-50/50 dark:bg-rose-950/20" : "border-transparent bg-muted/30 focus-within:border-primary/30"}`}>
+                                <textarea
+                                    placeholder={t("notes_content_placeholder")}
+                                    value={create.content}
+                                    onChange={e => dispatchCreate({ type: "SET", field: "content", value: e.target.value })}
+                                    rows={4}
+                                    className="w-full bg-transparent border-none resize-none placeholder:text-muted-foreground/50 focus:outline-none text-sm outline-none pr-6 block"
+                                />
+                                <span className="absolute right-2 top-2 text-rose-500 font-bold">*</span>
+                            </div>
+                            {!create.content.trim() && create.error && <p className="text-xs text-rose-500 mb-2 mt-1">Content is required.</p>}
+                            <div className="mb-3 mt-4">
                                 <label className="text-xs font-medium text-muted-foreground mb-1 block">{t("notes_category")}</label>
                                 <select
                                     value={create.category}
@@ -425,13 +532,15 @@ export default function NotesPage() {
                                     <label className="text-sm font-medium">{t("books_form_title")}</label>
                                     <input type="text" value={edit.title}
                                         onChange={e => dispatchEdit({ type: "SET", field: "title", value: e.target.value })}
-                                        className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50" />
+                                        className={`w-full bg-muted/50 border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 ${!edit.title.trim() ? "border-rose-400" : "border-border"}`} />
+                                    {!edit.title.trim() && <p className="text-xs text-rose-500 mt-1">Title is required.</p>}
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Content</label>
+                                    <label className="text-sm font-medium">Content <span className="text-rose-500">*</span></label>
                                     <textarea rows={6} value={edit.content}
                                         onChange={e => dispatchEdit({ type: "SET", field: "content", value: e.target.value })}
-                                        className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 resize-none" />
+                                        className={`w-full bg-muted/50 border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 resize-none ${!edit.content.trim() ? "border-rose-400" : "border-border"}`} />
+                                    {!edit.content.trim() && <p className="text-xs text-rose-500 mt-1">Content is required.</p>}
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">{t("notes_category")}</label>

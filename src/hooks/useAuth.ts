@@ -7,13 +7,21 @@ export function useAuth() {
     const isLoggedIn = status === "authenticated" && !!session?.user;
     const role = (session?.user as any)?.role as string | undefined;
     const username = (session?.user as any)?.username as string | undefined;
+    const userId = (session?.user as any)?.id as string | undefined;
 
     const isKing = isLoggedIn && role === "king";
     const isQueen = isLoggedIn && role === "queen";
 
+    /** User can only delete their own comment */
+    const canDeleteComment = (authorId: string): boolean => {
+        if (!isLoggedIn) return false;
+        return userId === authorId;
+    };
+
     return {
         user: session?.user ?? null,
         username: username ?? null,
+        userId: userId ?? null,
         role: role ?? null,
         isLoggedIn,
         isKing,
@@ -29,5 +37,9 @@ export function useAuth() {
         canManageUsers: isKing,
         /** Only King can change user roles */
         canChangeRole: isKing,
+        /** Any logged-in user can comment */
+        canComment: isLoggedIn,
+        /** King can delete any comment; others only their own */
+        canDeleteComment,
     };
 }

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { ArrowRight, PenLine, BookMarked, ChevronRight, BookOpen, Sparkles, Smile, CloudRain, Zap, Coffee, Star } from "lucide-react";
+import { ArrowRight, PenLine, BookMarked, ChevronRight, BookOpen, Sparkles, Smile, CloudRain, Zap, Coffee, Star, MessageCircle } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePolling } from "@/hooks/usePolling";
 
 const fadeIn = {
     hidden: { opacity: 0, y: 20 },
@@ -34,6 +36,7 @@ export interface NoteData {
     category: string;
     imageUrl: string | null;
     createdAt: string;
+    _count?: { comments: number };
 }
 
 const NOTE_CATEGORIES = [
@@ -80,10 +83,18 @@ interface HomeContentProps {
 
 export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeContentProps) {
     const { lang, t } = useLanguage();
+    const router = useRouter();
+
+    // Background polling: silently refreshes this server component's props every 30s
+    // to keep the dashboard (latest books, recent notes) up to date automatically
+    usePolling(() => {
+        router.refresh();
+    }, 30_000, isLoggedIn);
 
     function getBookLabel(book: BookData): string | null {
-        if (isBookNew(book.createdAt)) return t("home_new_book");
-        if (book.parts[0] && isBookNew(book.parts[0].createdAt)) return t("home_new_part");
+        if (isBookNew(book.createdAt) || (book.parts[0] && isBookNew(book.parts[0].createdAt))) {
+            return lang === "id" ? "✦ BARU" : lang === "jp" ? "✦ 新着" : "✦ NEW";
+        }
         return null;
     }
 
@@ -152,52 +163,77 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                             </Link>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                            {recentNotes.map((note) => {
-                                const catStyle = getCatStyle(note.category);
-                                const CatIcon = catStyle.icon;
-                                const noteIsNew = isNew(note.createdAt);
-                                const imgSrc = getCategoryImage(note.category, note.imageUrl);
-                                return (
-                                    <motion.div variants={fadeIn} key={note.id} className="group relative rounded-2xl border border-border bg-card/50 overflow-hidden hover:shadow-[0_8px_30px_rgb(248,200,220,0.12)] hover:-translate-y-1 transition-all duration-300 backdrop-blur-sm flex flex-col">
-                                        {noteIsNew && (
-                                            <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md">
-                                                {lang === "id" ? "✦ BARU" : lang === "jp" ? "✦ 新着" : "✦ NEW"}
-                                            </div>
-                                        )}
-                                        <div className="aspect-video w-full overflow-hidden bg-muted">
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={imgSrc} alt={note.title}
-                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-                                                onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_NOTE_IMAGE; }} />
-                                        </div>
-                                        <div className="p-5 flex flex-col flex-1">
-                                            <div className="flex items-center gap-2 mb-3">
-                                                <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${catStyle.bg} ${catStyle.text}`}>
-                                                    <CatIcon className="h-3 w-3" />{note.category}
-                                                </span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {new Date(note.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" })}
-                                                </span>
-                                            </div>
-                                            <h3 className="text-lg font-bold mb-2 group-hover:text-primary transition-colors line-clamp-1">{note.title}</h3>
-                                            <p className="text-muted-foreground text-sm line-clamp-2 mb-4 flex-grow">
-                                                {note.content.substring(0, 100)}{note.content.length > 100 ? "..." : ""}
-                                            </p>
-                                            <Link href={`/notes/${note.id}`} className="inline-flex items-center text-sm font-medium text-accent opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {t("home_read_more")} <ChevronRight className="ml-1 h-4 w-4" />
+                        /*
+                         * Elegant horizontal slider:
+                         * – No negative-margin hack → left/right edge stays flush with surrounding content
+                         * – Shows up to 3 full cards before horizontal overflow begins
+                         * – Snap-scrolling + hidden scrollbar for clean UX
+                         */
+                        <div
+                            className="w-full overflow-x-auto pb-3 snap-x snap-mandatory scroll-smooth"
+                            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" } as React.CSSProperties}
+                        >
+                            <div
+                                className="flex gap-5"
+                                /* Min card width: 280px / Max: 360px. 3 cards show before overflow. */
+                                style={{ width: "max-content" }}
+                            >
+                                {recentNotes.map((note) => {
+                                    const catStyle = getCatStyle(note.category);
+                                    const CatIcon = catStyle.icon;
+                                    const noteIsNew = isNew(note.createdAt);
+                                    const imgSrc = getCategoryImage(note.category, note.imageUrl);
+                                    return (
+                                        <motion.div variants={fadeIn} key={note.id}
+                                            className="group relative rounded-2xl border border-border bg-card/50 overflow-hidden hover:shadow-[0_8px_30px_rgba(248,200,220,0.15)] hover:-translate-y-1 transition-all duration-300 backdrop-blur-sm flex flex-col snap-start flex-shrink-0 w-[82vw] sm:w-72 md:w-80 lg:w-[340px]"
+                                        >
+                                            <Link href={`/notes/${note.id}`} className="flex flex-col h-full w-full">
+                                                {noteIsNew && (
+                                                    <div className="absolute top-3 right-3 z-10 flex items-center gap-1 bg-emerald-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md">
+                                                        {lang === "id" ? "✦ BARU" : lang === "jp" ? "✦ 新着" : "✦ NEW"}
+                                                    </div>
+                                                )}
+                                                <div className="aspect-video w-full overflow-hidden bg-muted">
+                                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                                    <img src={imgSrc} alt={note.title}
+                                                        className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                                                        onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_NOTE_IMAGE; }} />
+                                                </div>
+                                                <div className="p-5 flex flex-col flex-1">
+                                                    <div className="flex items-center gap-2 mb-3">
+                                                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${catStyle.bg} ${catStyle.text}`}>
+                                                            <CatIcon className="h-3 w-3" />{note.category}
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            {new Date(note.createdAt).toLocaleDateString(dateLocale, { day: "numeric", month: "short", year: "numeric" })}
+                                                        </span>
+                                                    </div>
+                                                    <h3 className="text-base font-bold mb-2 group-hover:text-primary transition-colors line-clamp-1">{note.title}</h3>
+                                                    <p className="text-muted-foreground text-sm line-clamp-2 flex-1">
+                                                        {note.content.substring(0, 120)}{note.content.length > 120 ? "…" : ""}
+                                                    </p>
+                                                    {(note._count?.comments ?? 0) > 0 && (
+                                                        <div className="flex items-center gap-1.5 mt-3 pt-3 border-t border-border/40">
+                                                            <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-muted-foreground bg-muted/80 border border-border/60 px-2 py-0.5 rounded-full">
+                                                                <MessageCircle className="h-3 w-3" />
+                                                                {note._count!.comments}
+                                                            </span>
+                                                            <span className="text-[10px] text-muted-foreground/60">{lang === "id" ? "komentar" : lang === "jp" ? "コメント" : "comments"}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </Link>
-                                        </div>
-                                    </motion.div>
-                                );
-                            })}
+                                        </motion.div>
+                                    );
+                                })}
+                            </div>
                         </div>
                     )}
                 </motion.section>
             )}
 
             {/* Latest Books Section */}
-            <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={stagger} className={`space-y-8 pb-20 ${isLoggedIn ? "" : "mt-16 sm:mt-28"}`}>
+            <motion.section initial="hidden" whileInView="visible" viewport={{ once: true, margin: "-100px" }} variants={stagger} className={`pb-20 ${isLoggedIn ? "mt-8 sm:mt-12" : "mt-16 sm:mt-28"}`}>
                 <div className="flex items-end justify-between border-b border-border/50 pb-4">
                     <motion.div variants={fadeIn} className="flex items-center gap-3">
                         <div className="h-6 w-1 rounded-full bg-secondary"></div>
@@ -220,32 +256,34 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                         </Link>
                     </div>
                 ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                        {books.map((book) => {
-                            const label = getBookLabel(book);
-                            return (
-                                <motion.div variants={fadeIn} key={book.id} className="group flex flex-col gap-3">
-                                    <Link href={`/books/${book.id}`} className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
-                                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                                        <img src={book.cover || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop"}
-                                            alt={book.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
-                                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                                            <div className="text-white text-xs font-medium backdrop-blur-sm bg-white/20 px-2 py-1 rounded">{t("home_read_book")}</div>
-                                        </div>
-                                        {label && (
-                                            <div className="absolute top-2 left-2 flex items-center gap-1 bg-primary text-primary-foreground text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg">
-                                                <Sparkles className="h-2.5 w-2.5" />{label}
+                    <div className="relative -mx-4 md:-mx-6 lg:-mx-10 px-4 md:px-6 lg:px-10 mt-6">
+                        <div className="flex overflow-x-auto gap-4 md:gap-6 pb-8 snap-x snap-mandatory hide-scrollbar">
+                            {books.map((book) => {
+                                const label = getBookLabel(book);
+                                return (
+                                    <motion.div variants={fadeIn} key={book.id} className="group flex flex-col gap-3 flex-shrink-0 w-[45vw] sm:w-[160px] md:w-[180px] lg:w-[200px] snap-start">
+                                        <Link href={`/books/${book.id}`} className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={book.cover || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop"}
+                                                alt={book.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                                                <div className="text-white text-xs font-medium backdrop-blur-sm bg-white/20 px-2 py-1 rounded">{t("home_read_book")}</div>
                                             </div>
-                                        )}
-                                    </Link>
-                                    <div>
-                                        <Link href={`/books/${book.id}`} className="font-bold hover:text-primary transition-colors line-clamp-1">{book.title}</Link>
-                                        <p className="text-sm text-muted-foreground">{book.author}</p>
-                                        <p className="text-xs text-accent mt-1">{book._count.parts} {t("books_parts")}</p>
-                                    </div>
-                                </motion.div>
-                            );
-                        })}
+                                            {label && (
+                                                <div className={`absolute top-2 left-2 flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-lg bg-emerald-500 text-white`}>
+                                                    {label}
+                                                </div>
+                                            )}
+                                        </Link>
+                                        <div>
+                                            <Link href={`/books/${book.id}`} className="font-bold hover:text-primary transition-colors line-clamp-1">{book.title}</Link>
+                                            <p className="text-sm text-muted-foreground line-clamp-1">{book.author}</p>
+                                            <p className="text-xs text-accent mt-1">{book._count.parts} {t("books_parts")}</p>
+                                        </div>
+                                    </motion.div>
+                                );
+                            })}
+                        </div>
                     </div>
                 )}
             </motion.section>

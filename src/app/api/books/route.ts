@@ -5,8 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { createBookSchema } from "@/lib/validations";
 import { requireAuth } from "@/lib/authGuard";
 
-export const dynamic = "force-dynamic";
-
 export async function GET() {
     try {
         const session = await getServerSession(authOptions);
@@ -43,7 +41,9 @@ export async function GET() {
                 return a.isFavorite ? -1 : 1;
             });
 
-        return NextResponse.json(mappedBooks);
+        const res = NextResponse.json(mappedBooks);
+        res.headers.set("Cache-Control", "private, max-age=30, stale-while-revalidate=300");
+        return res;
     } catch (error) {
         console.error("Failed to fetch books:", error);
         return NextResponse.json({ error: "Failed to fetch books" }, { status: 500 });
