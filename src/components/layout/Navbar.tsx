@@ -201,12 +201,16 @@ export function Navbar() {
     ];
 
     if (role === "king") {
-        navLinks.push({ href: "/users", key: "nav_users", Icon: Users });
+        navLinks.push(
+            { href: "/users", key: "nav_users", Icon: Users },
+            { href: "/king/access", key: "nav_access", Icon: Bell } // or an Activity icon
+        );
     }
 
-    // Translation fallback for the new Users key
+    // Translation fallback for the new Users/Access key
     const getNavLabel = (key: string) => {
         if (key === "nav_users") return "Users";
+        if (key === "nav_access") return "Activity";
         return t(key);
     };
 
@@ -292,15 +296,15 @@ export function Navbar() {
                 <div className="w-full max-w-[1600px] mx-auto flex h-16 items-center px-4 md:px-6 lg:px-10 gap-3">
 
                     {/* Logo */}
-                    <Link href="/" className="flex items-center space-x-2 shrink-0 mr-2 lg:mr-6">
+                    <Link href="/" className="flex items-center space-x-2 shrink-0 mr-2 lg:mr-4">
                         <div className="bg-primary/20 p-1.5 rounded-lg">
                             <BookOpen className="h-5 w-5 text-accent" />
                         </div>
-                        <span className="font-bold text-base tracking-tight hidden sm:inline-block">{t("brand")}</span>
+                        <span className="font-bold text-base tracking-tight block md:hidden xl:inline-block">{t("brand")}</span>
                     </Link>
 
                     {/* Desktop nav links */}
-                    <nav className="hidden md:flex items-center gap-2 lg:gap-5 text-sm font-medium mr-auto">
+                    <nav className="hidden md:flex items-center gap-1.5 lg:gap-3 xl:gap-5 text-sm font-medium mr-auto">
                         {navLinks.map((link) => {
                             const isActive = pathname === link.href;
                             return (
@@ -316,15 +320,15 @@ export function Navbar() {
                     <div className="flex-1 md:hidden" />
 
                     {/* Desktop: Lang toggle + Search */}
-                    <div className="hidden md:flex items-center gap-2 flex-1 max-w-xs">
+                    <div className="hidden md:flex items-center gap-2 flex-1 max-w-[180px] xl:max-w-xs">
                         {/* Language toggle */}
                         <button
                             onClick={() => setLang(lang === "en" ? "id" : lang === "id" ? "jp" : "en")}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-border/60 bg-muted/50 hover:bg-muted text-xs font-medium transition-colors shrink-0"
+                            className="flex items-center gap-1.5 px-2.5 xl:px-3 py-1.5 rounded-full border border-border/60 bg-muted/50 hover:bg-muted text-xs font-medium transition-colors shrink-0"
                             title={lang === "en" ? "Ganti ke Bahasa Indonesia" : lang === "id" ? "日本語に切り替える" : "Switch to English"}
                         >
                             <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-                            <span>{lang === "en" ? "🇺🇸 EN" : lang === "id" ? "🇮🇩 ID" : "🇯🇵 JP"}</span>
+                            <span className="hidden xl:inline">{lang === "en" ? "🇺🇸 EN" : lang === "id" ? "🇮🇩 ID" : "🇯🇵 JP"}</span>
                         </button>
 
                         {/* Desktop search */}
@@ -464,14 +468,14 @@ export function Navbar() {
                                         : "bg-rose-100 text-rose-700 border-rose-200 dark:bg-rose-900/30 dark:text-rose-400 dark:border-rose-700/50"
                                         } border`}>
                                         <Crown className={`h-3 w-3 ${role === "king" ? "text-amber-500" : "text-rose-500"}`} />
-                                        <span className="hidden lg:inline">{role === "king" ? "King" : "Queen"}</span>
+                                        <span className="hidden xl:inline">{role === "king" ? "King" : "Queen"}</span>
                                     </span>
-                                    <span className="text-xs lg:text-sm font-medium leading-none max-w-[80px] lg:max-w-none truncate">{username}</span>
+                                    <span className="text-xs lg:text-sm font-medium leading-none max-w-[80px] xl:max-w-[120px] truncate">{username}</span>
                                 </div>
                                 <button
                                     onClick={() => signOut({ callbackUrl: window.location.origin + "/" })}
                                     title="Logout"
-                                    className="inline-flex items-center justify-center rounded-full h-8 w-8 bg-muted/50 hover:bg-red-100 hover:text-red-600 transition-colors"
+                                    className="inline-flex items-center justify-center rounded-full h-8 w-8 bg-muted/50 hover:bg-red-100 hover:text-red-600 transition-colors shrink-0"
                                 >
                                     <LogOut className="h-3.5 w-3.5" />
                                 </button>
