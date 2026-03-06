@@ -406,8 +406,8 @@ export default function GalleryPage() {
 
             {/* Hero — plain CSS animation; no motion.div so Framer doesn't block first paint */}
             <div className="flex flex-col items-center text-center max-w-2xl mx-auto space-y-4 animate-fadeIn">
-                <div className="bg-primary/10 p-4 rounded-full mb-4">
-                    <Camera className="h-8 w-8 text-primary" />
+                <div className="bg-secondary/10 p-4 rounded-full mb-4">
+                    <Camera className="h-8 w-8 text-secondary" />
                 </div>
                 <h1 className="text-4xl md:text-5xl font-bold tracking-tight">{t("gallery_h1")}</h1>
                 <p className="text-muted-foreground text-lg">{t("gallery_subtitle")}</p>

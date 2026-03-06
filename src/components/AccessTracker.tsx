@@ -15,17 +15,11 @@ export function AccessTracker() {
             if (loggedRef.current) return;
 
             try {
-                // Check if we already logged in the last 30 minutes
-                const lastLogStr = localStorage.getItem("lastAccessLog");
-                const now = Date.now();
-                const THIRTY_MINUTES = 30 * 60 * 1000;
+                // Check if we already logged in this session
+                const hasLogged = sessionStorage.getItem("hasLoggedAccess");
 
-                if (lastLogStr) {
-                    const lastLogTime = parseInt(lastLogStr, 10);
-                    if (!isNaN(lastLogTime) && (now - lastLogTime < THIRTY_MINUTES)) {
-                        // Avoid spamming
-                        return;
-                    }
+                if (hasLogged) {
+                    return;
                 }
 
                 const res = await fetch("/api/access", {
@@ -33,7 +27,7 @@ export function AccessTracker() {
                 });
 
                 if (res.ok) {
-                    localStorage.setItem("lastAccessLog", now.toString());
+                    sessionStorage.setItem("hasLoggedAccess", "true");
                     loggedRef.current = true;
                 }
             } catch (err) {

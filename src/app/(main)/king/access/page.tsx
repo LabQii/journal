@@ -3,7 +3,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { redirect } from "next/navigation";
 import { Clock, Activity, Sparkles, Eye } from "lucide-react";
-import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { id } from "date-fns/locale";
 
 export const metadata = {
@@ -69,8 +69,8 @@ export default async function AccessLogsPage() {
                 <div className="flex flex-col gap-3 sm:gap-4">
                     {logs.map((log: any, index: number) => {
                         const dateObj = new Date(log.createdAt);
-                        const timeStr = format(dateObj, "HH:mm");
-                        const dayStr = format(dateObj, "EEEE, d MMMM yyyy", { locale: id });
+                        const timeStr = formatInTimeZone(dateObj, "Asia/Jakarta", "HH:mm");
+                        const dayStr = formatInTimeZone(dateObj, "Asia/Jakarta", "EEEE, d MMMM yyyy", { locale: id });
                         const displayName = log.user.name || log.user.username;
                         const isFirst = index === 0;
 
