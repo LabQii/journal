@@ -1,8 +1,12 @@
 /**
- * SmartImage — always renders a plain <img> for direct browser fetching.
- * We previously used next/image for Supabase URLs, but the server-side proxy
- * caused 7s timeouts in dev/serverless. Supabase Storage already serves
- * WebP files with CDN caching, so next/image optimization adds no benefit.
+ * SmartImage — renders a plain <img> for direct browser fetching.
+ * We use next/image with `unoptimized: true` in next.config.ts so
+ * Supabase Storage serves WebP files via its own CDN without a proxy.
+ *
+ * Key attributes emitted:
+ * - loading="eager" + fetchpriority="high" for above-fold images (priority prop)
+ * - loading="lazy" + fetchpriority="auto" for below-fold images
+ * - decoding="async" always — avoids blocking the main thread on decode
  */
 
 interface SmartImageProps {
@@ -11,8 +15,11 @@ interface SmartImageProps {
     fill?: boolean;
     sizes?: string;
     className?: string;
+    /** Set true for the first visible images on the page to boost LCP */
     priority?: boolean;
     style?: React.CSSProperties;
+    width?: number;
+    height?: number;
     onClick?: React.MouseEventHandler<HTMLImageElement>;
 }
 
@@ -24,6 +31,8 @@ export function SmartImage({
     className,
     priority,
     style,
+    width,
+    height,
     onClick,
 }: SmartImageProps) {
     const fillStyle: React.CSSProperties = fill
@@ -36,7 +45,12 @@ export function SmartImage({
             src={src}
             alt={alt}
             loading={priority ? "eager" : "lazy"}
+            // fetchpriority is a valid HTML attribute; React 19 passes it through correctly
+            // eslint-disable-next-line react/no-unknown-property
+            fetchPriority={priority ? "high" : "auto"}
             decoding="async"
+            width={width}
+            height={height}
             className={className}
             style={{ ...fillStyle, ...style }}
             onClick={onClick}
