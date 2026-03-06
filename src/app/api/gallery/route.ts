@@ -23,6 +23,7 @@ export async function GET() {
             .map((img) => ({
                 id: img.id,
                 photoUrl: img.photoUrl,
+                photoPublicId: img.photoPublicId,
                 description: img.description,
                 createdAt: img.createdAt,
                 isFavorite: img.favoritedBy ? img.favoritedBy.length > 0 : false,
@@ -52,7 +53,11 @@ export async function POST(req: NextRequest) {
         const body = await req.json();
         const validatedData = createGallerySchema.parse(body);
         const image = await prisma.gallery.create({
-            data: { photoUrl: validatedData.photoUrl, description: validatedData.description ?? null },
+            data: {
+                photoUrl: validatedData.photoUrl,
+                photoPublicId: validatedData.photoPublicId,
+                description: validatedData.description ?? null
+            },
         });
 
         // Notify all other users

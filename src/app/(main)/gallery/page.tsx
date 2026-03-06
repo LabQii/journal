@@ -23,6 +23,7 @@ export default async function GalleryPage() {
     const images: GalleryImage[] = rawImages.map((img) => ({
         id: img.id,
         photoUrl: img.photoUrl,
+        photoPublicId: img.photoPublicId,
         description: img.description,
         isFavorite: img.favoritedBy ? img.favoritedBy.length > 0 : false,
         createdAt: img.createdAt.toISOString(),

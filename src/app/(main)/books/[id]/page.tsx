@@ -1,15 +1,62 @@
 "use client";
 // Force HMR rebuild
-import { useState, useEffect, use } from "react";
+import { useState, useEffect, use, useRef, startTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
     ArrowLeft, BookOpen, Clock, Heart, Share2, Play,
-    Edit3, Trash2, Plus, Loader2, X, Check, Pencil
+    Edit3, Trash2, Plus, Loader2, X, Check, Pencil, ImageIcon, MoreVertical
 } from "lucide-react";
+import { format } from "date-fns";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
+
+// --- Mobile Action Menu Component ---
+function MobileActionMenu({ children }: { children: React.ReactNode }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    return (
+        <div className="relative inline-block md:hidden" ref={menuRef}>
+            <button
+                onClick={(e) => {
+                    e.preventDefault();
+                    setIsOpen(!isOpen);
+                }}
+                className="p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted/50 transition-colors"
+            >
+                <MoreVertical className="h-5 w-5" />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-full mt-2 w-48 bg-card border border-border shadow-xl rounded-xl p-2 z-50 flex flex-col gap-1.5"
+                    >
+                        {children}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
 
 interface Part {
     id: string;
@@ -26,6 +73,7 @@ interface Book {
     description: string;
     author: string;
     cover: string | null;
+    coverPublicId: string | null;
     publishedDate: string | null;
     status: string;
     isFavorite: boolean;
@@ -48,6 +96,10 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
     const [editAuthor, setEditAuthor] = useState("");
     const [editDescription, setEditDescription] = useState("");
     const [editCover, setEditCover] = useState("");
+    const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
+    const [editCoverPreview, setEditCoverPreview] = useState("");
+    const [editCoverError, setEditCoverError] = useState("");
+    const editCoverInputRef = useRef<HTMLInputElement>(null);
     const [editPublishedDate, setEditPublishedDate] = useState("");
     const [editStatus, setEditStatus] = useState("ONGOING");
     const [isSaving, setIsSaving] = useState(false);
@@ -91,6 +143,7 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                 setEditAuthor(data.author);
                 setEditDescription(data.description);
                 setEditCover(data.cover || "");
+                setEditCoverPreview(data.cover || "");
                 setEditStatus(data.status || "ONGOING");
                 setEditPublishedDate(data.publishedDate ? data.publishedDate.substring(0, 10) : "");
             }
@@ -101,47 +154,114 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
         }
     };
 
+    const handleEditCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) {
+            setEditCoverFile(null);
+            setEditCoverPreview(editCover);
+            return;
+        }
+        if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+            setEditCoverError("Only JPG, PNG, or WebP allowed."); return;
+        }
+        if (file.size > 2 * 1024 * 1024) {
+            setEditCoverError("File must be under 2MB."); return;
+        }
+        setEditCoverFile(file);
+        setEditCoverPreview(URL.createObjectURL(file));
+        setEditCoverError("");
+    };
+
     const handleUpdate = async () => {
         if (!book) return;
-        setIsSaving(true);
-        try {
-            const res = await fetch(`/api/books/${book.id}`, {
-                method: "PATCH",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    title: editTitle,
-                    author: editAuthor,
-                    description: editDescription,
-                    cover: editCover || null,
-                    status: editStatus,
-                    publishedDate: editPublishedDate || null,
-                }),
-            });
-            if (res.ok) {
-                const updated = await res.json();
-                setBook({ ...book, ...updated });
-                setIsEditing(false);
+
+        // Optimistic UI updates
+        const optimisticBook: Book = {
+            ...book,
+            title: editTitle,
+            author: editAuthor,
+            description: editDescription,
+            status: editStatus,
+            publishedDate: editPublishedDate || book.publishedDate,
+            cover: editCoverPreview || book.cover,
+            coverPublicId: book.coverPublicId,
+        };
+
+        const formValues = {
+            title: editTitle,
+            author: editAuthor,
+            description: editDescription,
+            status: editStatus,
+            publishedDate: editPublishedDate,
+            coverPreview: editCoverPreview,
+            coverFile: editCoverFile,
+            oldCover: editCover,
+        };
+
+        startTransition(() => {
+            setBook(optimisticBook);
+        });
+        setIsEditing(false);
+
+        // Background sync
+        (async () => {
+            try {
+                let coverUrl = formValues.oldCover;
+                let coverPublicId: string | undefined;
+
+                if (formValues.coverFile) {
+                    const { uploadToCloudinary } = await import("@/lib/uploadToCloudinary");
+                    const uploadResult = await uploadToCloudinary(formValues.coverFile, "books");
+                    coverUrl = uploadResult.secureUrl;
+                    coverPublicId = uploadResult.publicId;
+                }
+
+                const res = await fetch(`/api/books/${book.id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        title: formValues.title,
+                        author: formValues.author,
+                        description: formValues.description,
+                        cover: coverUrl || null,
+                        coverPublicId: coverPublicId,
+                        status: formValues.status,
+                        publishedDate: formValues.publishedDate || null,
+                    }),
+                });
+
+                if (res.ok) {
+                    const updated = await res.json();
+                    startTransition(() => {
+                        setBook(prev => prev ? { ...prev, ...updated } : prev);
+                    });
+                } else {
+                    console.error("Failed to update book");
+                }
+            } catch (error) {
+                console.error("Failed to update book:", error);
             }
-        } catch (error) {
-            console.error("Failed to update book:", error);
-        } finally {
-            setIsSaving(false);
-        }
+        })();
     };
 
     const handleDelete = async () => {
         if (!book) return;
         setIsDeleting(true);
-        try {
-            const res = await fetch(`/api/books/${book.id}`, { method: "DELETE" });
-            if (res.ok) {
-                router.push("/books");
+        // Optimistic UI Delete
+        setShowDeleteConfirm(false);
+        router.push("/books");
+
+        // Background sync
+        (async () => {
+            try {
+                const res = await fetch(`/api/books/${book.id}`, { method: "DELETE" });
+                if (res.ok) {
+                    router.refresh();
+                }
+            } catch (error) {
+                console.error("Failed to delete book:", error);
             }
-        } catch (error) {
-            console.error("Failed to delete book:", error);
-        } finally {
-            setIsDeleting(false);
-        }
+        })();
     };
 
     // ── Heart / Favorite ──────────────────────────────────────────────────────
@@ -276,7 +396,18 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                 <div className="flex gap-2">
                     {canUpdate && (
                         <button
-                            onClick={() => setIsEditing(true)}
+                            onClick={() => {
+                                setEditTitle(book.title);
+                                setEditAuthor(book.author);
+                                setEditDescription(book.description);
+                                setEditCover(book.cover || "");
+                                setEditCoverPreview(book.cover || "");
+                                setEditCoverFile(null);
+                                setEditCoverError("");
+                                setEditStatus(book.status);
+                                setEditPublishedDate(book.publishedDate ? book.publishedDate.substring(0, 10) : "");
+                                setIsEditing(true);
+                            }}
                             className="flex items-center gap-1.5 px-5 py-2 text-sm font-medium rounded-full bg-pink-50/40 text-pink-300 hover:bg-pink-50 hover:text-pink-400 hover:border-pink-200/60 transition-colors border border-pink-100/50 shadow-sm"
                         >
                             <Edit3 className="h-4 w-4" /> Edit
@@ -381,7 +512,10 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                         <div className="flex flex-col justify-center gap-1.5 p-5 sm:p-6 bg-pink-50/40 dark:bg-pink-950/10 border border-pink-100/60 dark:border-border/40 rounded-[2rem] shadow-sm backdrop-blur-sm">
                             <span className="text-[11px] font-bold uppercase tracking-widest text-pink-400/90">{lang === "id" ? "Tanggal" : lang === "jp" ? "日付" : "Date"}</span>
                             <span className="text-xl sm:text-2xl font-black text-rose-950 dark:text-rose-50 flex items-center h-full">
-                                {new Date(book.createdAt).toLocaleDateString("en-US", { month: "short", year: "numeric" })}
+                                {new Date(book.publishedDate || book.createdAt).toLocaleDateString(
+                                    lang === "id" ? "id-ID" : lang === "jp" ? "ja-JP" : "en-US",
+                                    { day: "numeric", month: "short", year: "numeric" }
+                                )}
                             </span>
                         </div>
 
@@ -491,25 +625,48 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                                         </Link>
                                         {/* Part actions — king only */}
                                         {(canUpdate || canDelete) && (
-                                            <div className="flex items-center gap-1.5 ml-3 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                {canUpdate && (
-                                                    <button
-                                                        onClick={() => openEditPart(part)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-pink-300 bg-pink-50/40 border border-pink-100/50 hover:bg-pink-50 hover:text-pink-400 hover:border-pink-200/60 transition-colors shadow-sm"
-                                                        aria-label="Edit part"
-                                                    >
-                                                        <Pencil className="h-3.5 w-3.5" /> Edit
-                                                    </button>
-                                                )}
-                                                {canDelete && (
-                                                    <button
-                                                        onClick={() => setPartToDelete(part)}
-                                                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-rose-500 bg-pink-100/50 border border-pink-200/80 hover:bg-pink-100 hover:border-pink-300 transition-colors shadow-sm"
-                                                        aria-label="Delete part"
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" /> Delete
-                                                    </button>
-                                                )}
+                                            <div className="flex justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity ml-3 shrink-0">
+                                                {/* Desktop Actions */}
+                                                <div className="hidden md:flex items-center gap-2">
+                                                    {canUpdate && (
+                                                        <button
+                                                            onClick={() => openEditPart(part)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-pink-300 bg-pink-50/40 border border-pink-100/50 hover:bg-pink-50 hover:text-pink-400 hover:border-pink-200/60 transition-colors shadow-sm"
+                                                            aria-label="Edit part"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" /> <span>Edit</span>
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => setPartToDelete(part)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-rose-500 bg-pink-100/50 border border-pink-200/80 hover:bg-pink-100 hover:border-pink-300 transition-colors shadow-sm"
+                                                            aria-label="Delete part"
+                                                        >
+                                                            <Trash2 className="h-3.5 w-3.5" /> <span>Delete</span>
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Mobile 3-dot Actions */}
+                                                <MobileActionMenu>
+                                                    {canUpdate && (
+                                                        <button
+                                                            onClick={() => openEditPart(part)}
+                                                            className="flex items-center gap-2 px-3 py-2 w-full text-left rounded-lg text-sm font-medium text-pink-500 hover:bg-pink-50/50 transition-colors"
+                                                        >
+                                                            <Pencil className="h-4 w-4" /> Edit
+                                                        </button>
+                                                    )}
+                                                    {canDelete && (
+                                                        <button
+                                                            onClick={() => setPartToDelete(part)}
+                                                            className="flex items-center gap-2 px-3 py-2 w-full text-left rounded-lg text-sm font-medium text-rose-500 hover:bg-rose-50/50 transition-colors"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" /> Delete
+                                                        </button>
+                                                    )}
+                                                </MobileActionMenu>
                                             </div>
                                         )}
                                     </div>
@@ -543,7 +700,6 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                                 {[
                                     { label: t("books_form_title"), value: editTitle, set: setEditTitle, type: "text" },
                                     { label: t("books_form_author"), value: editAuthor, set: setEditAuthor, type: "text" },
-                                    { label: t("books_form_cover"), value: editCover, set: setEditCover, type: "url" },
                                     { label: "Published Date", value: editPublishedDate, set: setEditPublishedDate, type: "date" },
                                 ].map(({ label, value, set, type }) => (
                                     <div key={label} className="space-y-2">
@@ -551,6 +707,28 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
                                         <input type={type} value={value} onChange={e => set(e.target.value)} className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all" />
                                     </div>
                                 ))}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">{t("books_form_cover")}</label>
+                                    <div className={`w-full rounded-xl border-2 border-dashed bg-muted/30 hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden border-border`}
+                                        onClick={() => editCoverInputRef.current?.click()}>
+                                        {editCoverPreview ? (
+                                            <div className="relative aspect-[2/3] max-h-48 mx-auto">
+                                                <img src={editCoverPreview} alt="Cover preview" className="w-full h-full object-cover" decoding="async" />
+                                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                                                    <span className="text-white text-xs font-medium">{lang === "id" ? "Klik untuk mengganti" : lang === "jp" ? "クリックして変更" : "Click to change"}</span>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center gap-2 py-8 px-4 text-muted-foreground">
+                                                <ImageIcon className="h-8 w-8" />
+                                                <span className="text-sm font-medium">{lang === "id" ? "Klik untuk unggah sampul" : lang === "jp" ? "クリックしてカバーをアップロード" : "Click to upload cover"}</span>
+                                                <span className="text-xs">JPG, PNG, WebP — maks 2MB</span>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <input ref={editCoverInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handleEditCoverChange} />
+                                    {editCoverError && <p className="text-xs text-rose-500 mt-1">{editCoverError}</p>}
+                                </div>
                                 <div className="space-y-2">
                                     <label className="text-sm font-medium">{t("books_form_desc")}</label>
                                     <textarea rows={4} value={editDescription} onChange={e => setEditDescription(e.target.value)} className="w-full bg-muted/50 border border-border rounded-xl px-4 py-2.5 outline-none focus:ring-2 focus:ring-primary/50 transition-all resize-none" />

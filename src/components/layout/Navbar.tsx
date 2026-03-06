@@ -4,12 +4,13 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
     BookOpen, Search, Bell, PenLine, BookMarked, Users,
-    X, Loader2, Globe, Menu, Home, Image, ImageIcon, LogIn, LogOut, Crown, MessageCircle
+    X, Loader2, Globe, Menu, Home, Image, ImageIcon, LogIn, LogOut, Crown, MessageCircle, Music
 } from "lucide-react";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSession, signOut } from "next-auth/react";
+import { RoyalGreetingAlert } from "./RoyalGreetingAlert";
 
 interface SearchResult {
     notes: { id: string; title: string; category: string }[];
@@ -626,6 +627,7 @@ export function Navbar() {
                     })}
                 </div>
             </nav>
+            <RoyalGreetingAlert />
         </>
     );
 }

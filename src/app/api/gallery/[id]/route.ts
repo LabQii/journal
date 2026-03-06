@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth } from "@/lib/authGuard";
 import { supabase, extractStoragePath } from "@/lib/supabase";
+import { deleteFromCloudinary } from "@/lib/cloudinaryServer";
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const auth = await requireAuth("king");
@@ -13,7 +14,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         // Fetch current photoUrl before update
         const existing = await prisma.gallery.findUnique({
             where: { id },
-            select: { photoUrl: true },
+            select: { photoUrl: true, photoPublicId: true },
         });
 
         const body = await req.json();
@@ -21,23 +22,30 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
             where: { id },
             data: {
                 ...(body.photoUrl !== undefined && { photoUrl: body.photoUrl }),
+                ...(body.photoPublicId !== undefined && { photoPublicId: body.photoPublicId }),
                 ...(body.description !== undefined && { description: body.description || null }),
             },
         });
 
-        // Delete old photo from Supabase Storage if URL changed
+        // Delete old photo from Storage or Cloudinary if URL changed
         if (
             existing?.photoUrl &&
             body.photoUrl !== undefined &&
             body.photoUrl !== existing.photoUrl
         ) {
-            const oldPath = extractStoragePath(existing.photoUrl, "gallery");
-            if (oldPath) {
-                const { error: deleteError } = await supabase.storage
-                    .from("gallery")
-                    .remove([oldPath]);
-                if (deleteError) {
-                    console.warn("Failed to delete old gallery image from storage:", deleteError.message);
+            if (existing.photoPublicId) {
+                await deleteFromCloudinary(existing.photoPublicId);
+            } else if (existing.photoUrl.includes("res.cloudinary.com")) {
+                await deleteFromCloudinary(existing.photoUrl);
+            } else {
+                const oldPath = extractStoragePath(existing.photoUrl, "gallery");
+                if (oldPath) {
+                    const { error: deleteError } = await supabase.storage
+                        .from("gallery")
+                        .remove([oldPath]);
+                    if (deleteError) {
+                        console.warn("Failed to delete old gallery image from storage:", deleteError.message);
+                    }
                 }
             }
         }
@@ -59,20 +67,26 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
         // Fetch photoUrl before deleting
         const existing = await prisma.gallery.findUnique({
             where: { id },
-            select: { photoUrl: true },
+            select: { photoUrl: true, photoPublicId: true },
         });
 
         await prisma.gallery.delete({ where: { id } });
 
-        // Delete image from Supabase Storage
+        // Delete image from Storage or Cloudinary
         if (existing?.photoUrl) {
-            const imagePath = extractStoragePath(existing.photoUrl, "gallery");
-            if (imagePath) {
-                const { error: deleteError } = await supabase.storage
-                    .from("gallery")
-                    .remove([imagePath]);
-                if (deleteError) {
-                    console.warn("Failed to delete gallery image from storage:", deleteError.message);
+            if (existing.photoPublicId) {
+                await deleteFromCloudinary(existing.photoPublicId);
+            } else if (existing.photoUrl.includes("res.cloudinary.com")) {
+                await deleteFromCloudinary(existing.photoUrl);
+            } else {
+                const imagePath = extractStoragePath(existing.photoUrl, "gallery");
+                if (imagePath) {
+                    const { error: deleteError } = await supabase.storage
+                        .from("gallery")
+                        .remove([imagePath]);
+                    if (deleteError) {
+                        console.warn("Failed to delete gallery image from storage:", deleteError.message);
+                    }
                 }
             }
         }

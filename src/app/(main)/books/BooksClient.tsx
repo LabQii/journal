@@ -7,7 +7,7 @@ import { BookOpen, Heart, Plus, Loader2, X, ImageIcon } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { SmartImage } from "@/components/SmartImage";
-import { uploadToSupabase } from "@/lib/uploadToSupabase";
+import { uploadToCloudinary } from "@/lib/uploadToCloudinary";
 
 export interface Book {
     id: string;
@@ -182,31 +182,87 @@ export default function BooksClient({ initialBooks }: { initialBooks: Book[] }) 
         setIsSaving(true);
         try {
             let coverUrl: string;
+            let coverPublicId: string | undefined;
             try {
-                coverUrl = await uploadToSupabase(form.coverFile, "books");
+                const uploadResult = await uploadToCloudinary(form.coverFile, "books");
+                coverUrl = uploadResult.secureUrl;
+                coverPublicId = uploadResult.publicId;
             } catch (uploadErr: any) {
                 dispatchForm({ type: "SET_COVER_ERROR", msg: uploadErr.message || "Upload failed." });
                 return;
             }
-            const res = await fetch("/api/books", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ title: form.title, author: form.author, description: form.description, cover: coverUrl, status: form.status }),
-            });
-            if (res.ok) {
-                const newBook = await res.json();
-                startTransition(() => {
-                    setBooks(prev => {
-                        const withCount = { ...newBook, _count: { parts: 0 } };
-                        return [...prev.filter(b => b.isFavorite), withCount, ...prev.filter(b => !b.isFavorite)];
-                    });
+
+            // Optimistic DB creation (local only)
+            const tempId = "temp-" + Date.now();
+            const optimisticBook: Book = {
+                id: tempId,
+                title: form.title,
+                description: form.description,
+                author: form.author,
+                cover: coverUrl, // Use the real uploaded URL so it doesn't break
+                status: form.status,
+                isFavorite: false,
+                createdAt: new Date().toISOString(),
+                _count: { parts: 0 }
+            };
+
+            const formValues = {
+                title: form.title,
+                author: form.author,
+                description: form.description,
+                status: form.status,
+                coverUrl: coverUrl,
+                coverPublicId: coverPublicId,
+            };
+
+            startTransition(() => {
+                setBooks(prev => {
+                    return [...prev.filter(b => b.isFavorite), optimisticBook, ...prev.filter(b => !b.isFavorite)];
                 });
-                setIsCreating(false);
-                resetForm();
-            } else {
-                const data = await res.json();
-                dispatchForm({ type: "SET_COVER_ERROR", msg: "Failed to create book: " + (data.error ? JSON.stringify(data.error) : "unknown error") });
-            }
+            });
+
+            setIsCreating(false);
+            resetForm();
+
+            // Background worker for saving to DB
+            (async () => {
+                try {
+                    const res = await fetch("/api/books", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            title: formValues.title,
+                            author: formValues.author,
+                            description: formValues.description,
+                            cover: formValues.coverUrl,
+                            coverPublicId: formValues.coverPublicId,
+                            status: formValues.status
+                        }),
+                    });
+
+                    if (res.ok) {
+                        const newBook = await res.json();
+                        startTransition(() => {
+                            setBooks(prev => {
+                                const withoutTemp = prev.filter(b => b.id !== tempId);
+                                const withCount = { ...newBook, _count: { parts: 0 } };
+                                return [...withoutTemp.filter(b => b.isFavorite), withCount, ...withoutTemp.filter(b => !b.isFavorite)];
+                            });
+                        });
+                    } else {
+                        console.error("Failed to create book in DB", await res.json());
+                        // Revert UI on failure
+                        startTransition(() => {
+                            setBooks(prev => prev.filter(b => b.id !== tempId));
+                        });
+                    }
+                } catch (error) {
+                    console.error("Failed background book creation:", error);
+                    startTransition(() => {
+                        setBooks(prev => prev.filter(b => b.id !== tempId));
+                    });
+                }
+            })();
         } catch (error: any) {
             dispatchForm({ type: "SET_COVER_ERROR", msg: error.message || "An unexpected error occurred." });
         } finally {

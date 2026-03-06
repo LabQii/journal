@@ -26,6 +26,7 @@ model Book {
   description   String
   author        String
   cover         String?
+  coverPublicId String?
   status        String         @default("ONGOING")
   publishedDate DateTime?
   createdAt     DateTime       @default(now())
@@ -46,8 +47,9 @@ model Part {
 
 model Gallery {
   id          String            @id @default(cuid())
-  photoUrl    String
-  description String?
+  photoUrl      String
+  photoPublicId String?
+  description   String?
   createdAt   DateTime          @default(now())
   favoritedBy GalleryFavorite[]
 }
@@ -63,6 +65,7 @@ model User {
   password         String
   role             Role              @default(queen)
   name             String?
+  lastActiveAt     DateTime?         @default(now())
   bookFavorites    BookFavorite[]
   galleryFavorites GalleryFavorite[]
   notifications    Notification[]
@@ -125,4 +128,11 @@ model Notification {
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RoyalGreeting {
+  id        String   @id @default(cuid())
+  content   String
+  isSeen    Boolean  @default(false)
+  createdAt DateTime @default(now())
 }

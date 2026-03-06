@@ -4,7 +4,7 @@ import bcrypt from "bcryptjs";
 const prisma = new PrismaClient();
 
 async function main() {
-    const iqbalHash = await bcrypt.hash("iqbal123", 12);
+    const iqbalHash = await bcrypt.hash("iqbal57673", 12);
     const nattaHash = await bcrypt.hash("natta123", 12);
 
     await prisma.user.upsert({

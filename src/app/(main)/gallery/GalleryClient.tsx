@@ -6,11 +6,12 @@ import { Camera, X, Download, Maximize2, ZoomIn, ZoomOut, Plus, Loader2, Pencil,
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/hooks/useAuth";
 import { SmartImage } from "@/components/SmartImage";
-import { uploadToSupabase } from "@/lib/uploadToSupabase";
+import { uploadToCloudinary } from "@/lib/uploadToCloudinary";
 
 export interface GalleryImage {
     id: string;
     photoUrl: string;
+    photoPublicId: string | null;
     description: string | null;
     isFavorite: boolean;
     createdAt: string;
@@ -54,7 +55,7 @@ const GalleryCard = memo(function GalleryCard({
                         {img.description && (
                             <h3 className="text-white font-bold text-lg leading-tight mb-1">{img.description}</h3>
                         )}
-                        <p className="text-white/80 text-xs">{new Date(img.createdAt).toLocaleDateString()}</p>
+                        <p className="text-white/80 text-xs">{new Date(img.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>
                     </div>
                     <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none">
                         <div className="bg-background/40 backdrop-blur-md p-3 rounded-full border border-white/20 text-white transform scale-50 group-hover:scale-100 transition-transform duration-300 pointer-events-auto">
@@ -289,8 +290,11 @@ export default function GalleryClient({ initialImages }: { initialImages: Galler
         dispatchAdd({ type: "SET_SAVING", v: true });
         try {
             let photoUrl: string;
+            let photoPublicId: string | undefined;
             try {
-                photoUrl = await uploadToSupabase(add.file, "gallery");
+                const uploadResult = await uploadToCloudinary(add.file, "gallery");
+                photoUrl = uploadResult.secureUrl;
+                photoPublicId = uploadResult.publicId;
             } catch (uploadErr: any) {
                 dispatchAdd({ type: "SET_ERROR", msg: uploadErr.message || "Upload failed." });
                 return;
@@ -298,7 +302,11 @@ export default function GalleryClient({ initialImages }: { initialImages: Galler
             const res = await fetch("/api/gallery", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ photoUrl, description: add.description.trim() || null }),
+                body: JSON.stringify({
+                    photoUrl,
+                    photoPublicId,
+                    description: add.description.trim() || null
+                }),
             });
             if (res.ok) {
                 const newImage = await res.json();
@@ -326,9 +334,12 @@ export default function GalleryClient({ initialImages }: { initialImages: Galler
         dispatchEdit({ type: "SET_SAVING", v: true });
         try {
             let photoUrl = edit.img.photoUrl;
+            let photoPublicId = edit.img.photoPublicId || undefined;
             if (edit.file) {
                 try {
-                    photoUrl = await uploadToSupabase(edit.file, "gallery");
+                    const uploadResult = await uploadToCloudinary(edit.file, "gallery");
+                    photoUrl = uploadResult.secureUrl;
+                    photoPublicId = uploadResult.publicId;
                 } catch (uploadErr: any) {
                     dispatchEdit({ type: "SET_ERROR", msg: uploadErr.message || "Upload failed." });
                     return;
@@ -337,7 +348,11 @@ export default function GalleryClient({ initialImages }: { initialImages: Galler
             const res = await fetch(`/api/gallery/${edit.img.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ photoUrl, description: edit.description.trim() || null }),
+                body: JSON.stringify({
+                    photoUrl,
+                    photoPublicId,
+                    description: edit.description.trim() || null
+                }),
             });
             if (res.ok) {
                 const updated = await res.json();

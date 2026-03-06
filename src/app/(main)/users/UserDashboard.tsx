@@ -1,13 +1,60 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { UserPlus, Pencil, Shield, Trash2, Loader2, AlertCircle, Crown } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Search, Plus, Shield, ShieldCheck, Mail, LogIn, Crown, User as UserIcon, Settings, Key, MoreVertical, Trash2, Pencil, Calendar, EyeOff, Loader2, Send, CheckCircle2, AlertCircle, UserPlus } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import { AppRole } from "@/lib/userService";
 import { useAuth } from "@/hooks/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
 import UserModal from "./UserModal";
 import RoleModal from "./RoleModal";
 import DeleteModal from "./DeleteModal";
+
+// --- Mobile Action Menu Component ---
+function MobileActionMenu({ children }: { children: React.ReactNode }) {
+    const [isOpen, setIsOpen] = useState(false);
+    const menuRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        function handleClickOutside(event: MouseEvent) {
+            if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        }
+        if (isOpen) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isOpen]);
+
+    return (
+        <div className="relative inline-block md:hidden" ref={menuRef}>
+            <button
+                onClick={(e) => {
+                    e.preventDefault();
+                    setIsOpen(!isOpen);
+                }}
+                className="p-2 text-muted-foreground hover:text-foreground rounded-full hover:bg-muted/50 transition-colors"
+            >
+                <MoreVertical className="h-5 w-5" />
+            </button>
+
+            <AnimatePresence>
+                {isOpen && (
+                    <motion.div
+                        initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="absolute right-0 top-full mt-2 w-48 bg-card border border-border shadow-xl rounded-xl p-2 z-50 flex flex-col gap-1.5"
+                    >
+                        {children}
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </div>
+    );
+}
 
 export type User = {
     id: string;
@@ -21,6 +68,11 @@ export default function UserDashboard() {
     const [users, setUsers] = useState<User[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+
+    // Royal Greeting state
+    const [greeting, setGreeting] = useState("");
+    const [isSendingGreeting, setIsSendingGreeting] = useState(false);
+    const [greetingSuccess, setGreetingSuccess] = useState(false);
 
     // Modals state
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
@@ -68,6 +120,31 @@ export default function UserDashboard() {
         setIsDeleteModalOpen(true);
     };
 
+    const handleSendGreeting = async () => {
+        if (!greeting.trim()) return;
+        setIsSendingGreeting(true);
+        try {
+            const res = await fetch("/api/royal-greeting", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ content: greeting.trim() })
+            });
+
+            if (res.ok) {
+                setGreeting("");
+                setGreetingSuccess(true);
+                setTimeout(() => setGreetingSuccess(false), 3000);
+            } else {
+                const data = await res.json();
+                setError(data.error || "Failed to send greeting");
+            }
+        } catch (err: any) {
+            setError(err.message || "An unexpected error occurred");
+        } finally {
+            setIsSendingGreeting(false);
+        }
+    };
+
     if (isLoading) {
         return (
             <div className="flex flex-col items-center justify-center py-20">
@@ -112,6 +189,63 @@ export default function UserDashboard() {
                     </span>
                 </button>
             </div>
+
+            {/* Royal Greeting Section */}
+            {(currentUser as any)?.role === "king" && (
+                <div className="bg-gradient-to-br from-amber-50/50 to-orange-50/30 dark:from-amber-950/20 dark:to-orange-950/10 border border-amber-100 dark:border-amber-900/30 rounded-2xl p-5 sm:p-7 shadow-sm overflow-hidden relative">
+
+                    {/* Subtle King Background Logo */}
+                    <Crown className="absolute -right-6 -bottom-8 w-48 h-48 text-amber-500/5 dark:text-amber-500/10 rotate-12 pointer-events-none" />
+
+                    <div className="relative z-10 w-full">
+                        <div className="flex items-center gap-2.5 mb-2">
+                            <Crown className="w-5 h-5 text-amber-500" />
+                            <h3 className="text-xl font-extrabold text-foreground tracking-tight">Royal Greeting</h3>
+                        </div>
+                        <p className="text-sm text-muted-foreground mb-5 max-w-xl leading-relaxed">
+                            {lang === "id"
+                                ? "Kirimkan pesan sapaan untuk Queen. Pesan ini akan muncul secara elegan saat ia membuka jurnal."
+                                : lang === "jp"
+                                    ? "Queenに挨拶のメッセージを送信します。このメッセージは、彼女がジャーナルを開いたときにエレガントに表示されます。"
+                                    : "Send a personalized greeting to the Queen. It will appear elegantly when she opens the journal."}
+                        </p>
+
+                        <div className="bg-background border border-border/50 rounded-xl overflow-hidden shadow-sm focus-within:ring-2 focus-within:ring-amber-200 focus-within:border-amber-300 transition-all">
+                            <textarea
+                                value={greeting}
+                                onChange={(e) => setGreeting(e.target.value.slice(0, 120))}
+                                placeholder={lang === "id" ? "Tulis sapaan manismu di sini..." : lang === "jp" ? "ここにあなたの甘い挨拶を書いてください..." : "Write your sweet greeting here..."}
+                                className="w-full bg-transparent resize-none p-4 pb-2 text-sm sm:text-base min-h-[90px] text-foreground focus:outline-none placeholder:text-muted-foreground/50"
+                                rows={2}
+                                maxLength={120}
+                            />
+                            <div className="bg-muted/20 border-t border-border/40 px-4 py-3 flex items-center justify-between">
+                                <span className={`text-xs font-medium tracking-wide ${greeting.length > 100 ? "text-amber-500" : "text-muted-foreground"
+                                    }`}>
+                                    {greeting.length} / 120
+                                </span>
+
+                                <button
+                                    onClick={handleSendGreeting}
+                                    disabled={!greeting.trim() || isSendingGreeting || greetingSuccess}
+                                    className="flex items-center gap-2 px-5 py-2 rounded-xl bg-amber-100 hover:bg-amber-200 text-amber-700 font-semibold text-sm transition-colors disabled:bg-muted disabled:text-muted-foreground dark:disabled:bg-muted/50 disabled:cursor-not-allowed active:scale-[0.98]"
+                                >
+                                    {isSendingGreeting ? (
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                    ) : greetingSuccess ? (
+                                        <CheckCircle2 className="w-4 h-4" />
+                                    ) : (
+                                        <Send className="w-4 h-4" />
+                                    )}
+                                    {greetingSuccess
+                                        ? (lang === "id" ? "Terkirim!" : lang === "jp" ? "送信しました！" : "Sent!")
+                                        : (lang === "id" ? "Kirim Pesan" : lang === "jp" ? "挨拶を送信" : "Send Greeting")}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <div className="bg-card border border-border/50 rounded-2xl overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
@@ -158,30 +292,57 @@ export default function UserDashboard() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex items-center justify-end gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                                <button
-                                                    onClick={() => handleEditUser(user)}
-                                                    className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted rounded-md transition-colors"
-                                                    title={lang === "id" ? "Edit kredensial" : lang === "jp" ? "認証情報を編集" : "Edit credentials"}
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleChangeRole(user)}
-                                                    className="p-1.5 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/30 rounded-md transition-colors"
-                                                    title={lang === "id" ? "Ubah peran" : lang === "jp" ? "ロールを変更" : "Change role"}
-                                                >
-                                                    <Shield className="h-4 w-4" />
-                                                </button>
-                                                {!isSelf && (
+                                            <div className="flex justify-end opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                                                {/* Desktop Actions */}
+                                                <div className="hidden md:flex items-center gap-2">
                                                     <button
-                                                        onClick={() => handleDeleteUser(user)}
-                                                        className="p-1.5 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 rounded-md transition-colors"
-                                                        title={lang === "id" ? "Hapus pengguna" : lang === "jp" ? "ユーザーを削除" : "Delete user"}
+                                                        onClick={() => handleEditUser(user)}
+                                                        className="p-1.5 sm:p-2 text-muted-foreground hover:text-foreground hover:bg-muted rounded-lg transition-colors"
+                                                        title={lang === "id" ? "Edit kredensial" : lang === "jp" ? "認証情報を編集" : "Edit credentials"}
                                                     >
-                                                        <Trash2 className="h-4 w-4" />
+                                                        <Pencil className="h-4 w-4" />
                                                     </button>
-                                                )}
+                                                    <button
+                                                        onClick={() => handleChangeRole(user)}
+                                                        className="p-1.5 sm:p-2 text-blue-500 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded-lg transition-colors"
+                                                        title={lang === "id" ? "Ubah peran" : lang === "jp" ? "ロールを変更" : "Change role"}
+                                                    >
+                                                        <Shield className="h-4 w-4" />
+                                                    </button>
+                                                    {!isSelf && (
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user)}
+                                                            className="p-1.5 sm:p-2 text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 rounded-lg transition-colors"
+                                                            title={lang === "id" ? "Hapus pengguna" : lang === "jp" ? "ユーザーを削除" : "Delete user"}
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                {/* Mobile 3-dot Actions */}
+                                                <MobileActionMenu>
+                                                    <button
+                                                        onClick={() => handleEditUser(user)}
+                                                        className="flex items-center gap-2 px-3 py-2 w-full text-left rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted/50 transition-colors"
+                                                    >
+                                                        <Pencil className="h-4 w-4" /> Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleChangeRole(user)}
+                                                        className="flex items-center gap-2 px-3 py-2 w-full text-left rounded-lg text-sm font-medium text-blue-500 hover:bg-blue-50/50 dark:hover:bg-blue-900/20 transition-colors"
+                                                    >
+                                                        <Shield className="h-4 w-4" /> Change Role
+                                                    </button>
+                                                    {!isSelf && (
+                                                        <button
+                                                            onClick={() => handleDeleteUser(user)}
+                                                            className="flex items-center gap-2 px-3 py-2 w-full text-left rounded-lg text-sm font-medium text-red-500 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-colors"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" /> Delete
+                                                        </button>
+                                                    )}
+                                                </MobileActionMenu>
                                             </div>
                                         </td>
                                     </tr>

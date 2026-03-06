@@ -13,6 +13,38 @@ export async function GET() {
     }
 
     const userId = (session.user as any).id;
+    const userRole = (session.user as any).role;
+
+    // Update active status and sync access logs (fire and forget)
+    (async () => {
+        try {
+            await prisma.user.update({
+                where: { id: userId },
+                // @ts-ignore
+                data: { lastActiveAt: new Date() }
+            });
+
+            // If user is Queen, ensure she has an access log entry created within the last 30 minutes.
+            // If the King deleted the table while she was online, she won't have one, so we recreate it.
+            if (userRole === "queen") {
+                const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+                const recentLog = await prisma.accessLog.findFirst({
+                    where: {
+                        userId: userId,
+                        createdAt: { gte: thirtyMinsAgo }
+                    }
+                });
+
+                if (!recentLog) {
+                    await prisma.accessLog.create({
+                        data: { userId: userId }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error("Failed to sync active status in notifications:", e);
+        }
+    })();
 
     try {
         const notifications = await prisma.notification.findMany({

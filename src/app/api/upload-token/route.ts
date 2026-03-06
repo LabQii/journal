@@ -1,73 +1,59 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/authGuard";
-import { supabaseAdmin } from "@/lib/supabase";
+import { v2 as cloudinary } from "cloudinary";
 
 export const dynamic = "force-dynamic";
 
-const ALLOWED_BUCKETS = ["books", "gallery"] as const;
-const ALLOWED_EXTS = ["jpg", "jpeg", "png", "webp"] as const;
-type AllowedBucket = typeof ALLOWED_BUCKETS[number];
-type AllowedExt = typeof ALLOWED_EXTS[number];
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const ALLOWED_FOLDERS = ["books", "gallery"] as const;
+type AllowedFolder = typeof ALLOWED_FOLDERS[number];
 
 /**
- * GET /api/upload-token?bucket=<bucket>&ext=<ext>
+ * GET /api/upload-token?folder=<folder>
  *
- * Issues a one-time Supabase Signed Upload URL so the browser can upload
- * a file directly to Supabase Storage without proxying through Railway.
- * The file NEVER touches the Railway/Next.js server — only this tiny
- * JSON response (~150 bytes) does.
+ * Issues a Cloudinary signed upload token so the browser can upload
+ * directly to Cloudinary WITHOUT proxying through the Next.js server.
+ * Only ~200 bytes of JSON pass through the server.
  *
  * Flow:
- *   Browser → GET /api/upload-token  (Railway: ~5ms, no file data)
- *          ← { signedUrl, token, path, publicUrl }
- *   Browser → PUT signedUrl           (direct to Supabase, file bypasses Railway)
+ *   Browser → GET /api/upload-token  (server: ~10ms, no file data)
+ *          ← { signature, timestamp, apiKey, cloudName, folder }
+ *   Browser → POST https://api.cloudinary.com/v1_1/.../image/upload
+ *             (direct to Cloudinary CDN — bypasses Next.js entirely)
  */
 export async function GET(req: NextRequest) {
-    // Require authentication
     const auth = await requireAuth("any");
     if (auth instanceof NextResponse) return auth;
 
     const { searchParams } = new URL(req.url);
-    const bucket = searchParams.get("bucket") as AllowedBucket | null;
-    const ext = (searchParams.get("ext") ?? "jpg").toLowerCase() as AllowedExt;
+    const folder = searchParams.get("folder") as AllowedFolder | null;
 
-    // Validate bucket
-    if (!bucket || !ALLOWED_BUCKETS.includes(bucket)) {
+    if (!folder || !ALLOWED_FOLDERS.includes(folder)) {
         return NextResponse.json(
-            { error: "Invalid bucket. Must be 'books' or 'gallery'." },
+            { error: "Invalid folder. Must be 'books' or 'gallery'." },
             { status: 400 }
         );
     }
 
-    // Validate extension
-    const safeExt = ALLOWED_EXTS.includes(ext as AllowedExt) ? ext : "jpg";
+    const cloudinaryFolder = `journal/${folder}`;
+    const timestamp = Math.round(Date.now() / 1000);
 
-    // Generate a unique path: <timestamp>-<random>.ext
-    const timestamp = Date.now();
-    const rand = Math.random().toString(36).slice(2, 10);
-    const path = `${timestamp}-${rand}.${safeExt}`;
-
-    // Create a signed upload URL (expires in 60 seconds — plenty for a browser PUT)
-    const { data, error } = await supabaseAdmin.storage
-        .from(bucket)
-        .createSignedUploadUrl(path);
-
-    if (error || !data) {
-        console.error("Failed to create signed upload URL:", error);
-        return NextResponse.json(
-            { error: "Failed to generate upload URL." },
-            { status: 500 }
-        );
-    }
-
-    // Build the public URL the app will store in the database
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const publicUrl = `${supabaseUrl}/storage/v1/object/public/${bucket}/${path}`;
+    // Generate a signature for: folder + timestamp
+    const signature = cloudinary.utils.api_sign_request(
+        { folder: cloudinaryFolder, timestamp },
+        process.env.CLOUDINARY_API_SECRET!
+    );
 
     return NextResponse.json({
-        signedUrl: data.signedUrl,
-        token: data.token,
-        path,
-        publicUrl,
+        signature,
+        timestamp,
+        apiKey: process.env.CLOUDINARY_API_KEY,
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME,
+        folder: cloudinaryFolder,
     });
 }

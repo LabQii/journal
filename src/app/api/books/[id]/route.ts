@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { updateBookSchema } from "@/lib/validations";
 import { requireAuth } from "@/lib/authGuard";
 import { supabase, extractStoragePath } from "@/lib/supabase";
+import { deleteFromCloudinary } from "@/lib/cloudinaryServer";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
@@ -43,7 +44,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         // Fetch current book to get old cover URL (if any)
         const existing = await prisma.book.findUnique({
             where: { id: resolvedParams.id },
-            select: { cover: true },
+            select: { cover: true, coverPublicId: true },
         });
 
         const body = await req.json();
@@ -54,19 +55,27 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
         const book = await prisma.book.update({ where: { id: resolvedParams.id }, data });
 
-        // Delete old cover from Supabase Storage if it changed and was a storage URL
+        // Delete old cover from Supabase Storage or Cloudinary if it changed
         if (
             existing?.cover &&
             validatedData.cover !== undefined &&
             validatedData.cover !== existing.cover
         ) {
-            const oldPath = extractStoragePath(existing.cover, "books");
-            if (oldPath) {
-                const { error: deleteError } = await supabase.storage
-                    .from("books")
-                    .remove([oldPath]);
-                if (deleteError) {
-                    console.warn("Failed to delete old cover from storage:", deleteError.message);
+            // Try Cloudinary first
+            if (existing.coverPublicId) {
+                await deleteFromCloudinary(existing.coverPublicId);
+            } else if (existing.cover.includes("res.cloudinary.com")) {
+                await deleteFromCloudinary(existing.cover); // Fallback to URL extraction
+            } else {
+                // Fallback to Supabase Storage
+                const oldPath = extractStoragePath(existing.cover, "books");
+                if (oldPath) {
+                    supabase.storage
+                        .from("books")
+                        .remove([oldPath])
+                        .then(({ error }) => {
+                            if (error) console.warn("Failed to delete old cover from storage:", error.message);
+                        });
                 }
             }
         }
@@ -90,7 +99,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         // Fetch cover URL before deleting
         const existing = await prisma.book.findUnique({
             where: { id: resolvedParams.id },
-            select: { cover: true },
+            select: { cover: true, coverPublicId: true },
         });
 
         await prisma.$transaction([
@@ -98,15 +107,21 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
             prisma.book.delete({ where: { id: resolvedParams.id } }),
         ]);
 
-        // Delete cover from Supabase Storage after DB delete
+        // Delete cover from Storage or Cloudinary after DB delete
         if (existing?.cover) {
-            const coverPath = extractStoragePath(existing.cover, "books");
-            if (coverPath) {
-                const { error: deleteError } = await supabase.storage
-                    .from("books")
-                    .remove([coverPath]);
-                if (deleteError) {
-                    console.warn("Failed to delete cover from storage:", deleteError.message);
+            if (existing.coverPublicId) {
+                await deleteFromCloudinary(existing.coverPublicId);
+            } else if (existing.cover.includes("res.cloudinary.com")) {
+                await deleteFromCloudinary(existing.cover);
+            } else {
+                const coverPath = extractStoragePath(existing.cover, "books");
+                if (coverPath) {
+                    supabase.storage
+                        .from("books")
+                        .remove([coverPath])
+                        .then(({ error }) => {
+                            if (error) console.warn("Failed to delete cover from storage:", error.message);
+                        });
                 }
             }
         }

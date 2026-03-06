@@ -23,6 +23,7 @@ export const createBookSchema = z.object({
     description: z.string().min(1, "Description is required"),
     author: z.string().min(1, "Author is required").max(100),
     cover: z.string().optional().nullable(),
+    coverPublicId: z.string().optional().nullable(),
     status: z.string().optional(),
     publishedDate: z.string().optional().nullable(),
 });
@@ -32,6 +33,7 @@ export const updateBookSchema = z.object({
     description: z.string().min(1, "Description is required").optional(),
     author: z.string().min(1, "Author is required").max(100).optional(),
     cover: z.string().optional().nullable(),
+    coverPublicId: z.string().optional().nullable(),
     status: z.string().optional(),
     publishedDate: z.string().optional().nullable(),
     isFavorite: z.boolean().optional(),
@@ -53,10 +55,12 @@ export const updatePartSchema = z.object({
 // --- Gallery ---
 export const createGallerySchema = z.object({
     photoUrl: z.string().min(1, "Photo URL is required"),
+    photoPublicId: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
 });
 
 export const updateGallerySchema = z.object({
     photoUrl: z.string().min(1).optional(),
+    photoPublicId: z.string().optional().nullable(),
     description: z.string().optional().nullable(),
 });

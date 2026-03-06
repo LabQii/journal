@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/authGuard";
-import { supabaseAdmin } from "@/lib/supabase";
+import { v2 as cloudinary } from "cloudinary";
 
 export const dynamic = "force-dynamic";
 
-const MAX_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp"];
-const ALLOWED_BUCKETS = ["books", "gallery"];
+// Configure Cloudinary
+cloudinary.config({
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY,
+    api_secret: process.env.CLOUDINARY_API_SECRET,
+});
+
+const MAX_SIZE_BYTES = 10 * 1024 * 1024; // 10MB (Cloudinary handles further optimization)
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const ALLOWED_FOLDERS = ["gallery", "books"] as const;
+
+type AllowedFolder = typeof ALLOWED_FOLDERS[number];
 
 export async function POST(req: NextRequest) {
     // Only authenticated users can upload
@@ -16,12 +25,12 @@ export async function POST(req: NextRequest) {
     try {
         const formData = await req.formData();
         const file = formData.get("file") as File | null;
-        const bucket = formData.get("bucket") as string | null;
+        const folder = formData.get("folder") as AllowedFolder | null;
 
-        // Validate bucket
-        if (!bucket || !ALLOWED_BUCKETS.includes(bucket)) {
+        // Validate folder
+        if (!folder || !ALLOWED_FOLDERS.includes(folder)) {
             return NextResponse.json(
-                { error: "Invalid bucket. Must be 'books' or 'gallery'." },
+                { error: "Invalid folder. Must be 'books' or 'gallery'." },
                 { status: 400 }
             );
         }
@@ -34,7 +43,7 @@ export async function POST(req: NextRequest) {
         // Validate file type
         if (!ALLOWED_TYPES.includes(file.type)) {
             return NextResponse.json(
-                { error: "Only JPG, PNG, and WebP images are allowed." },
+                { error: "Only JPG, PNG, WebP, and GIF images are allowed." },
                 { status: 400 }
             );
         }
@@ -42,41 +51,39 @@ export async function POST(req: NextRequest) {
         // Validate file size
         if (file.size > MAX_SIZE_BYTES) {
             return NextResponse.json(
-                { error: "File size must be under 2MB." },
+                { error: "File size must be under 10MB." },
                 { status: 400 }
             );
         }
 
-        // Generate unique filename: timestamp-random.ext
-        const ext = file.type.split("/")[1].replace("jpeg", "jpg");
-        const filename = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
-
-        // Convert File to ArrayBuffer → Buffer
+        // Convert File to Buffer for Cloudinary upload
         const arrayBuffer = await file.arrayBuffer();
         const buffer = Buffer.from(arrayBuffer);
 
-        // Upload to Supabase Storage
-        const { error: uploadError } = await supabaseAdmin.storage
-            .from(bucket)
-            .upload(filename, buffer, {
-                contentType: file.type,
-                upsert: false,
-            });
+        // Upload to Cloudinary inside folder: journal/gallery or journal/books
+        const cloudinaryFolder = `journal/${folder}`;
 
-        if (uploadError) {
-            console.error("Supabase upload error:", uploadError);
-            return NextResponse.json(
-                { error: `Upload failed: ${uploadError.message}` },
-                { status: 500 }
-            );
-        }
+        const result = await new Promise<{ secure_url: string }>((resolve, reject) => {
+            cloudinary.uploader.upload_stream(
+                {
+                    folder: cloudinaryFolder,
+                    resource_type: "image",
+                    // Auto-optimize quality and format
+                    quality: "auto",
+                    fetch_format: "auto",
+                },
+                (error, result) => {
+                    if (error || !result) {
+                        reject(error || new Error("Cloudinary upload failed"));
+                    } else {
+                        resolve(result as { secure_url: string });
+                    }
+                }
+            ).end(buffer);
+        });
 
-        // Build public URL
-        const { data: publicUrlData } = supabaseAdmin.storage
-            .from(bucket)
-            .getPublicUrl(filename);
+        return NextResponse.json({ url: result.secure_url }, { status: 201 });
 
-        return NextResponse.json({ url: publicUrlData.publicUrl }, { status: 201 });
     } catch (error: any) {
         console.error("Upload route error:", error);
         return NextResponse.json(
