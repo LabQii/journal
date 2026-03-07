@@ -9,17 +9,14 @@ export async function GET() {
         const session = await getServerSession(authOptions);
         const role = (session?.user as any)?.role;
 
-        // If not a queen, don't throw an error, just return null so it doesn't pollute the logs
         if (role !== "queen") {
             return NextResponse.json(null);
         }
 
-        // Update Queen's active status (fire and forget)
         const userId = (session?.user as any)?.id;
         if (userId) {
             prisma.user.update({
                 where: { id: userId },
-                // @ts-ignore - Prisma types might not yet be fully reloaded by VSCode
                 data: { lastActiveAt: new Date() }
             }).catch(e => console.error("Failed to update lastActiveAt:", e));
         }
@@ -81,7 +78,8 @@ export async function PATCH(req: NextRequest) {
 
         return NextResponse.json(updated);
     } catch (error: any) {
-        if (error.code === "P2025") return NextResponse.json({ error: "Greeting not found" }, { status: 404 });
+        if (error.code === "P2025") return NextResponse.json
+            ({ error: "Greeting not found" }, { status: 404 });
         console.error("Failed to update royal greeting:", error);
         return NextResponse.json({ error: "Failed to update greeting" }, { status: 500 });
     }
