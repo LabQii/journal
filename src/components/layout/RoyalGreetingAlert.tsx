@@ -47,7 +47,11 @@ export function RoyalGreetingAlert() {
                         audioRef.current = new Audio("/sounds/notification.mp3");
                         audioRef.current.volume = 0.8;
                     }
-                    audioRef.current.play().catch(console.error);
+                    audioRef.current.play().catch((err: unknown) => {
+                        // Browser autoplay policy blocks audio without a prior user gesture — this is expected and harmless.
+                        if (err instanceof DOMException && err.name === "NotAllowedError") return;
+                        console.error("Failed to play notification sound:", err);
+                    });
                 }
             }
         } catch (error) {
@@ -61,8 +65,8 @@ export function RoyalGreetingAlert() {
 
         checkGreeting();
 
-        // Poll every 10 seconds for near-instant feel without abusing the server too much
-        const interval = setInterval(checkGreeting, 10000);
+        // Poll every 60 seconds — the window focus handler gives near-instant feel when switching tabs
+        const interval = setInterval(checkGreeting, 60000);
 
         // Also check immediately when the window regains focus (user switches back to the tab)
         const handleFocus = () => checkGreeting();

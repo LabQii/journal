@@ -247,21 +247,23 @@ export default function BookDetailPage({ params }: { params: Promise<{ id: strin
     const handleDelete = async () => {
         if (!book) return;
         setIsDeleting(true);
-        // Optimistic UI Delete
         setShowDeleteConfirm(false);
-        router.push("/books");
 
-        // Background sync
-        (async () => {
-            try {
-                const res = await fetch(`/api/books/${book.id}`, { method: "DELETE" });
-                if (res.ok) {
-                    router.refresh();
-                }
-            } catch (error) {
-                console.error("Failed to delete book:", error);
+        try {
+            const res = await fetch(`/api/books/${book.id}`, { method: "DELETE" });
+            if (res.ok) {
+                // Navigate first, then refresh so the books list page re-fetches
+                // fresh data from the server (without the deleted book).
+                router.push("/books");
+                router.refresh();
+            } else {
+                console.error("Failed to delete book");
             }
-        })();
+        } catch (error) {
+            console.error("Failed to delete book:", error);
+        } finally {
+            setIsDeleting(false);
+        }
     };
 
     // ── Heart / Favorite ──────────────────────────────────────────────────────
