@@ -3,8 +3,8 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import HomeContent from "@/components/home/HomeContent";
 
-// Always fetch fresh data on every request
-export const dynamic = "force-dynamic";
+// Next.js will dynamically render anyway due to getServerSession, 
+// but removing force-dynamic allows the built-in Link prefetching to cache the layout segments.
 
 export default async function Home() {
   // Read session server-side — guests get null
