@@ -170,7 +170,7 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                                 /* Min card width: 280px / Max: 360px. 3 cards show before overflow. */
                                 style={{ width: "max-content" }}
                             >
-                                {recentNotes.map((note) => {
+                                {recentNotes.map((note, idx) => {
                                     const catStyle = getCatStyle(note.category);
                                     const CatIcon = catStyle.icon;
                                     const noteIsNew = isNew(note.createdAt);
@@ -190,7 +190,8 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                                                     <img
                                                         src={imgSrc}
                                                         alt={note.title}
-                                                        loading="lazy"
+                                                        loading={idx < 3 ? "eager" : "lazy"}
+                                                        fetchPriority={idx < 3 ? "high" : "auto"}
                                                         decoding="async"
                                                         className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
                                                         onError={(e) => { (e.target as HTMLImageElement).src = DEFAULT_NOTE_IMAGE; }}
@@ -264,14 +265,18 @@ export default function HomeContent({ books, recentNotes, isLoggedIn }: HomeCont
                 ) : (
                     <div className="relative -mx-4 md:-mx-6 lg:-mx-10 px-4 md:px-6 lg:px-10 mt-6">
                         <div className="flex overflow-x-auto gap-4 md:gap-6 pb-8 snap-x snap-mandatory hide-scrollbar">
-                            {books.map((book) => {
+                            {books.map((book, idx) => {
                                 const label = getBookLabel(book);
                                 return (
                                     <motion.div variants={fadeIn} key={book.id} className="group flex flex-col gap-3 flex-shrink-0 w-[45vw] sm:w-[160px] md:w-[180px] lg:w-[200px] snap-start">
                                         <Link href={`/books/${book.id}`} className="relative aspect-[3/4] w-full rounded-xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300">
                                             {/* eslint-disable-next-line @next/next/no-img-element */}
                                             <img src={book.cover || "https://images.unsplash.com/photo-1544947950-fa07a98d237f?q=80&w=800&auto=format&fit=crop"}
-                                                alt={book.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
+                                                alt={book.title}
+                                                loading={idx < 4 ? "eager" : "lazy"}
+                                                fetchPriority={idx < 4 ? "high" : "auto"}
+                                                decoding="async"
+                                                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" />
                                             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
                                                 <div className="text-white text-xs font-medium backdrop-blur-sm bg-white/20 px-2 py-1 rounded">{t("home_read_book")}</div>
                                             </div>
